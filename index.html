@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chess vs Checkers</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="ui">
+    <div id="header">
+      <span id="wave-label">Wave 1</span>
+      <span id="score-label">Score: 0</span>
+      <button id="save-load-toggle">Save / Load</button>
+    </div>
+
+    <div id="save-panel" class="hidden">
+      <div id="save-slots"></div>
+    </div>
+
+    <div id="piece-select" class="hidden">
+      <h3>Choose your new piece:</h3>
+      <div id="piece-options"></div>
+    </div>
+
+    <div id="message-overlay" class="hidden">
+      <div id="message-box">
+        <h2 id="message-title"></h2>
+        <p id="message-body"></p>
+        <button id="message-btn">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="board-area">
+    <canvas id="left-strip"  width="48" height="640"></canvas>
+    <canvas id="game-canvas"></canvas>
+    <canvas id="right-strip" width="48" height="640"></canvas>
+  </div>
+
+  <div id="sidebar">
+    <div id="instructions">
+      <p>Click a piece to select, then click a square to move.</p>
+      <p>Capture all checkers to advance!</p>
+      <p>Pawns promote to Queens at the back rank.</p>
+      <p>En passant available on the 5th rank.</p>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

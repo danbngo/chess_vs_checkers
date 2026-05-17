@@ -1,0 +1,920 @@
+// ─── Constants ────────────────────────────────────────────────────────────────
+const COLS = 8, ROWS = 8;
+const CELL = 80;
+const MINI = 22; // captured-piece icon size in strips
+
+const canvas = document.getElementById('game-canvas');
+const ctx    = canvas.getContext('2d');
+canvas.width  = COLS * CELL;
+canvas.height = ROWS * CELL;
+
+const leftStrip  = document.getElementById('left-strip');
+const rightStrip = document.getElementById('right-strip');
+const lctx = leftStrip.getContext('2d');
+const rctx = rightStrip.getContext('2d');
+
+const CLR = {
+  lightSquare: '#f0d9b5',
+  darkSquare:  '#b58863',
+  highlight:   'rgba(0,200,100,0.45)',
+  attackHL:    'rgba(220,50,50,0.5)',
+  selected:    'rgba(50,150,255,0.5)',
+  chess:       { body: '#e8e8e8', outline: '#222', accent: '#aaa' },
+  checker:     { body: '#c0392b', outline: '#7b0000', accent: '#e74c3c' },
+};
+
+// ─── Image Assets ─────────────────────────────────────────────────────────────
+const IMAGES = {};
+for (const [key, src] of [
+  ['pawn',         'images/pawn.png'],
+  ['knight',       'images/knight.png'],
+  ['bishop',       'images/bishop.png'],
+  ['queen',        'images/queen.png'],
+  ['king',         'images/king.png'],
+  ['checker',      'images/checker.png'],
+  ['checker_king', 'images/checker_king.png'],
+]) {
+  const img = new Image();
+  img.onload = () => renderStrips(); // refresh strips once image loads
+  img.src = src;
+  IMAGES[key] = img;
+}
+function imgReady(key) {
+  const img = IMAGES[key];
+  return img && img.complete && img.naturalWidth > 0;
+}
+
+// ─── Animation System ─────────────────────────────────────────────────────────
+const activeAnims = new Map();
+
+function startAnim(piece, toRow, toCol, duration, onComplete) {
+  activeAnims.set(piece.id, {
+    fromRow: piece.row, fromCol: piece.col,
+    toRow, toCol,
+    startTime: performance.now(),
+    duration, onComplete,
+  });
+}
+
+function easeInOut(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+
+function getPieceRenderPos(piece) {
+  const anim = activeAnims.get(piece.id);
+  if (!anim) return { x: piece.col*CELL + CELL/2, y: piece.row*CELL + CELL/2 };
+  const t = easeInOut(Math.min(1, (performance.now() - anim.startTime) / anim.duration));
+  return {
+    x: (anim.fromCol + (anim.toCol - anim.fromCol)*t) * CELL + CELL/2,
+    y: (anim.fromRow + (anim.toRow - anim.fromRow)*t) * CELL + CELL/2,
+  };
+}
+
+function isAnyAnimating() { return activeAnims.size > 0; }
+
+function gameLoop() {
+  const now = performance.now();
+  const done = [];
+  for (const [id, anim] of activeAnims)
+    if (now >= anim.startTime + anim.duration) done.push([id, anim]);
+  for (const [id, anim] of done) { activeAnims.delete(id); anim.onComplete(); }
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+// ─── Move Annotation ──────────────────────────────────────────────────────────
+let moveAnnotation = null;
+
+const ANNOTATION = {
+  '!!': { label: 'Brilliant!',  color: '#00ee66', bg: 'rgba(0,60,20,0.92)'  },
+  '!':  { label: 'Good move',   color: '#44dd44', bg: 'rgba(0,50,10,0.88)'  },
+  '!?': { label: 'Interesting', color: '#aadd00', bg: 'rgba(40,50,0,0.88)'  },
+  '?!': { label: 'Dubious',     color: '#ffaa00', bg: 'rgba(70,35,0,0.88)'  },
+  '?':  { label: 'Mistake',     color: '#ff6600', bg: 'rgba(80,20,0,0.88)'  },
+  '??': { label: 'Blunder!',    color: '#ff2222', bg: 'rgba(90,0,0,0.92)'   },
+};
+
+function isThreatenedByChecker(row, col, board) {
+  for (const hdc of [-1, 1]) {
+    const ar=row-1, ac=col+hdc;
+    if (ar>=0 && ac>=0 && ac<COLS && board[ar]?.[ac]?.team==='checker') return true;
+    const br=row+1, bc=col+hdc;
+    if (br<ROWS && bc>=0 && bc<COLS) {
+      const p=board[br]?.[bc];
+      if (p?.team==='checker' && p.isKing) return true;
+    }
+  }
+  return false;
+}
+
+function evaluateMove(piece, fromRow, fromCol, wasThreatenedBefore, captured, wasPromotion) {
+  const board = state.board;
+  const isKing = piece.type==='king';
+  const nowThreatened = isThreatenedByChecker(piece.row, piece.col, board);
+  const threatenedCount = state.chessPieces.filter(
+    p => !p.dying && isThreatenedByChecker(p.row, p.col, board)
+  ).length;
+
+  if (isKing && nowThreatened) return '??';
+  if (!captured && nowThreatened && threatenedCount>=2) return '??';
+  if (!captured && nowThreatened) return '?';
+  if (wasPromotion) return nowThreatened ? '!?' : '!!';
+  if (captured && wasThreatenedBefore && !nowThreatened) return '!!';
+  if (captured?.isKing && !nowThreatened) return '!!';
+  if (captured && nowThreatened) return '!?';
+  if (captured && !nowThreatened) return '!';
+  let nearRisk = 0;
+  for (const dcc of [-2,0,2]) {
+    const nr=piece.row-2, nc=piece.col+dcc;
+    if (nr>=0 && nc>=0 && nc<COLS && board[nr]?.[nc]?.team==='checker') nearRisk++;
+  }
+  if (nearRisk>=2) return '?!';
+  return '';
+}
+
+function showMoveAnnotation(text, col, row) {
+  if (!text) return;
+  moveAnnotation = { text, x: col*CELL+CELL/2, y: row*CELL+6, startTime: performance.now() };
+}
+
+function drawAnnotation() {
+  if (!moveAnnotation) return;
+  const t = (performance.now() - moveAnnotation.startTime) / 2400;
+  if (t>=1) { moveAnnotation=null; return; }
+  const alpha = t<0.65 ? 1 : 1-(t-0.65)/0.35;
+  const yOff = -t*40;
+  const { text, x, y } = moveAnnotation;
+  const style = ANNOTATION[text] || { color:'#fff', bg:'rgba(0,0,0,0.7)' };
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font='bold 20px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+  const tw=ctx.measureText(text).width, px=10, py=6;
+  const bx=x-tw/2-px, by=y+yOff-24-py, bw=tw+px*2, bh=24+py*2, rad=6;
+  ctx.fillStyle=style.bg;
+  ctx.beginPath();
+  ctx.moveTo(bx+rad,by); ctx.lineTo(bx+bw-rad,by); ctx.arcTo(bx+bw,by,bx+bw,by+rad,rad);
+  ctx.lineTo(bx+bw,by+bh-rad); ctx.arcTo(bx+bw,by+bh,bx+bw-rad,by+bh,rad);
+  ctx.lineTo(bx+rad,by+bh); ctx.arcTo(bx,by+bh,bx,by+bh-rad,rad);
+  ctx.lineTo(bx,by+rad); ctx.arcTo(bx,by,bx+rad,by,rad);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle=style.color;
+  ctx.fillText(text, x, y+yOff);
+  ctx.font='11px sans-serif'; ctx.fillStyle='rgba(255,255,255,0.75)'; ctx.textBaseline='top';
+  ctx.fillText(ANNOTATION[text]?.label||'', x, y+yOff+2);
+  ctx.restore();
+}
+
+// ─── Piece Definitions ────────────────────────────────────────────────────────
+const PIECE_DEFS = {
+  pawn: {
+    name: 'Pawn', symbol: 'P', value: 1,
+    getMoves(r, c, board) {
+      const moves = [];
+      if (r>0 && !board[r-1][c]) moves.push([r-1,c]);
+      if (r===6 && !board[r-1][c] && !board[r-2][c]) moves.push([r-2,c]);
+      for (const dc of [-1,1])
+        if (c+dc>=0 && c+dc<COLS && r>0 && board[r-1][c+dc]?.team==='checker')
+          moves.push([r-1,c+dc]);
+      if (r===3) {
+        for (const dc of [-1,1]) {
+          if (c+dc<0||c+dc>=COLS) continue;
+          const adj=board[r][c+dc];
+          if (adj?.team==='checker' && state.enPassantCheckers.has(adj.id))
+            moves.push([r-1,c+dc]);
+        }
+      }
+      return moves;
+    }
+  },
+  knight: {
+    name: 'Knight', symbol: 'N', value: 3,
+    getMoves(r, c, board) {
+      const moves=[];
+      for (const [dr,dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+        const nr=r+dr, nc=c+dc;
+        if (nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&board[nr][nc]?.team!=='chess') moves.push([nr,nc]);
+      }
+      return moves;
+    }
+  },
+  bishop: {
+    name: 'Bishop', symbol: 'B', value: 3,
+    getMoves(r,c,board) { return slidingMoves(r,c,board,[[-1,-1],[-1,1],[1,-1],[1,1]]); }
+  },
+  rook: {
+    name: 'Rook', symbol: 'R', value: 5,
+    getMoves(r,c,board) { return slidingMoves(r,c,board,[[-1,0],[1,0],[0,-1],[0,1]]); }
+  },
+  queen: {
+    name: 'Queen', symbol: 'Q', value: 9,
+    getMoves(r,c,board) { return slidingMoves(r,c,board,[[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]]); }
+  },
+  king: {
+    name: 'King', symbol: 'K', value: 0,
+    getMoves(r,c,board) {
+      const moves=[];
+      for (const [dr,dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
+        const nr=r+dr,nc=c+dc;
+        if (nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&board[nr][nc]?.team!=='chess') moves.push([nr,nc]);
+      }
+      return moves;
+    }
+  },
+};
+
+function slidingMoves(r,c,board,dirs) {
+  const moves=[];
+  for (const [dr,dc] of dirs) {
+    let nr=r+dr,nc=c+dc;
+    while (nr>=0&&nr<ROWS&&nc>=0&&nc<COLS) {
+      if (board[nr][nc]) { if (board[nr][nc].team==='checker') moves.push([nr,nc]); break; }
+      moves.push([nr,nc]); nr+=dr; nc+=dc;
+    }
+  }
+  return moves;
+}
+
+// ─── Wave Config ──────────────────────────────────────────────────────────────
+const WAVE_CONFIG = [
+  { checkerCount:3,  newPieceChoices:[] },
+  { checkerCount:5,  newPieceChoices:['knight','bishop'] },
+  { checkerCount:6,  newPieceChoices:['rook','bishop'] },
+  { checkerCount:8,  newPieceChoices:['rook','knight'] },
+  { checkerCount:10, newPieceChoices:['queen','rook'] },
+  { checkerCount:12, newPieceChoices:['queen','knight'], kingsAt:4 },
+];
+
+function getWaveConfig(wave) {
+  if (wave<=WAVE_CONFIG.length) return WAVE_CONFIG[wave-1];
+  const last=WAVE_CONFIG[WAVE_CONFIG.length-1];
+  return { checkerCount:last.checkerCount+(wave-WAVE_CONFIG.length)*2,
+           newPieceChoices:last.newPieceChoices, kingsAt:last.kingsAt };
+}
+
+// ─── Game State ───────────────────────────────────────────────────────────────
+let state = {
+  wave:1, score:0,
+  board:null,
+  chessPieces:[], checkers:[],
+  selected:null, phase:'player',
+  nextId:0,
+  enPassantCheckers: new Set(),
+  capturedByChess:    [], // { isKing } — checkers taken by player
+  capturedByCheckers: [], // string piece type — chess pieces taken by checkers
+};
+
+function newId() { return state.nextId++; }
+function emptyBoard() { return Array.from({length:ROWS},()=>Array(COLS).fill(null)); }
+
+function syncBoard() {
+  state.board=emptyBoard();
+  for (const p of state.chessPieces) if (!p.dying) state.board[p.row][p.col]=p;
+  for (const c of state.checkers)    if (!c.dying) state.board[c.row][c.col]=c;
+}
+
+// ─── Placement ────────────────────────────────────────────────────────────────
+function fisherYates(arr) {
+  for (let i=arr.length-1;i>0;i--) {
+    const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]];
+  }
+}
+
+// Chess home squares matching real chess positions.
+// Pawns spread center-out: d2, e2, c2, f2, b2, g2, a2, h2.
+const CHESS_SLOTS = {
+  king:   [[7,4]],
+  queen:  [[7,3]],
+  rook:   [[7,0],[7,7]],
+  bishop: [[7,2],[7,5]],
+  knight: [[7,1],[7,6]],
+  pawn:   [[6,3],[6,4],[6,2],[6,5],[6,1],[6,6],[6,0],[6,7]],
+};
+function getChessSlot(type,index) {
+  return (CHESS_SLOTS[type]||[])[index] ?? [5, index%COLS];
+}
+
+// Checkers: dark squares, rows 0-1 preferred, shuffled
+function checkerStartPositions(count) {
+  const pri=[], ov=[];
+  for (let r=0;r<2;r++) for (let c=0;c<COLS;c++) if ((r+c)%2===1) pri.push([r,c]);
+  for (let r=2;r<4;r++) for (let c=0;c<COLS;c++) if ((r+c)%2===1) ov.push([r,c]);
+  fisherYates(pri); fisherYates(ov);
+  return [...pri,...ov].slice(0,count);
+}
+
+// ─── Wave Setup ───────────────────────────────────────────────────────────────
+function startWave(wave, chessPieces) {
+  const cfg=getWaveConfig(wave);
+  Object.assign(state, {
+    wave, phase:'player', selected:null,
+    enPassantCheckers: new Set(),
+    capturedByChess:    [],
+    capturedByCheckers: [],
+  });
+  moveAnnotation=null;
+
+  const typeCounts={};
+  state.chessPieces=chessPieces.map(p=>{
+    if (!typeCounts[p.type]) typeCounts[p.type]=0;
+    const [row,col]=getChessSlot(p.type,typeCounts[p.type]++);
+    return {...p, row, col, moved:false, dying:false, id:p.id??newId()};
+  });
+
+  const ckPos=checkerStartPositions(cfg.checkerCount);
+  state.checkers=ckPos.map(([r,c],i)=>({
+    type:'checker',team:'checker',row:r,col:c,
+    isKing:!!(cfg.kingsAt&&i<cfg.kingsAt),
+    dying:false,id:newId(),
+  }));
+
+  syncBoard(); updateUI(); renderStrips();
+}
+
+function initialChessPieces() {
+  return [
+    {type:'pawn', team:'chess'},
+    {type:'pawn', team:'chess'},
+    {type:'king', team:'chess'},
+    {type:'pawn', team:'chess'},
+  ];
+}
+
+// ─── Check Rules ──────────────────────────────────────────────────────────────
+function isKingInCheckAfterMove(piece, toRow, toCol, epCol) {
+  const temp=state.board.map(row=>[...row]);
+  temp[piece.row][piece.col]=null;
+  if (temp[toRow][toCol]?.team==='checker') temp[toRow][toCol]=null;
+  if (epCol!==undefined) temp[piece.row][epCol]=null;
+  temp[toRow][toCol]={...piece,row:toRow,col:toCol};
+  const king=piece.type==='king'
+    ? {row:toRow,col:toCol}
+    : state.chessPieces.find(p=>p.type==='king'&&!p.dying);
+  if (!king) return false;
+  return isThreatenedByChecker(king.row,king.col,temp);
+}
+
+function getLegalMoves(piece) {
+  const raw=PIECE_DEFS[piece.type].getMoves(piece.row,piece.col,state.board);
+  return raw.filter(([mr,mc])=>{
+    let epCol;
+    if (piece.type==='pawn'&&piece.row===3&&mc!==piece.col&&!state.board[mr]?.[mc]) {
+      const adj=state.board[piece.row]?.[mc];
+      if (adj?.team==='checker'&&state.enPassantCheckers.has(adj.id)) epCol=mc;
+    }
+    return !isKingInCheckAfterMove(piece,mr,mc,epCol);
+  });
+}
+
+// ─── Input ────────────────────────────────────────────────────────────────────
+canvas.addEventListener('click', e=>{
+  if (state.phase!=='player'||isAnyAnimating()) return;
+  const rect=canvas.getBoundingClientRect();
+  const col=Math.floor((e.clientX-rect.left)/CELL);
+  const row=Math.floor((e.clientY-rect.top)/CELL);
+
+  if (state.selected) {
+    const {piece,moves}=state.selected;
+    const hit=moves.find(([mr,mc])=>mr===row&&mc===col);
+    if (hit) { executeChessMove(piece,row,col); return; }
+  }
+  const clicked=state.board[row]?.[col];
+  if (clicked?.team==='chess') {
+    state.selected={piece:clicked,moves:getLegalMoves(clicked)};
+  } else {
+    state.selected=null;
+  }
+});
+
+// ─── Chess Move ───────────────────────────────────────────────────────────────
+function executeChessMove(piece, toRow, toCol) {
+  const target=state.board[toRow][toCol];
+  const fromRow=piece.row, fromCol=piece.col;
+  const wasThreatenedBefore=isThreatenedByChecker(fromRow,fromCol,state.board);
+
+  let epCapture=null;
+  if (piece.type==='pawn'&&!target&&toCol!==piece.col&&piece.row===3) {
+    const adj=state.board[piece.row][toCol];
+    if (adj?.team==='checker'&&state.enPassantCheckers.has(adj.id)) epCapture=adj;
+  }
+
+  state.selected=null; state.phase='animating';
+  state.enPassantCheckers=new Set();
+  state.board[piece.row][piece.col]=null;
+  if (target)    target.dying=true;
+  if (epCapture) epCapture.dying=true;
+
+  startAnim(piece, toRow, toCol, 280, ()=>{
+    piece.row=toRow; piece.col=toCol; piece.moved=true;
+    const origType=piece.type;
+    if (piece.type==='pawn'&&piece.row===0) piece.type='queen';
+    const wasPromotion=origType==='pawn'&&piece.type==='queen';
+
+    if (target) {
+      state.checkers=state.checkers.filter(c=>c.id!==target.id);
+      state.score+=target.isKing?20:10;
+      state.capturedByChess.push({isKing:target.isKing});
+    }
+    if (epCapture) {
+      state.checkers=state.checkers.filter(c=>c.id!==epCapture.id);
+      state.score+=epCapture.isKing?20:10;
+      state.capturedByChess.push({isKing:epCapture.isKing});
+    }
+    syncBoard(); updateUI(); renderStrips();
+
+    const ann=evaluateMove(piece,fromRow,fromCol,wasThreatenedBefore,target??epCapture,wasPromotion);
+    showMoveAnnotation(ann,toCol,toRow);
+
+    if (state.checkers.filter(c=>!c.dying).length===0) {
+      waveWon();
+    } else {
+      state.phase='checker_move';
+      setTimeout(runCheckerTurn,350);
+    }
+  });
+}
+
+// ─── Checker AI ───────────────────────────────────────────────────────────────
+// One checker moves per player turn.
+// Mandatory capture: if any checker can capture, a capturing checker is chosen.
+// Multi-jump: after any capture, if further captures available the piece must continue.
+
+function runCheckerTurn() {
+  if (state.phase!=='checker_move') return;
+  state.enPassantCheckers=new Set();
+  syncBoard();
+
+  const alive=state.checkers.filter(c=>!c.dying);
+  if (!alive.length) { checkerTurnDone(); return; }
+
+  const capturers=alive.filter(ck=>getCheckerMoves(ck).some(m=>m.capture));
+  const pool=capturers.length>0?capturers:alive;
+  const ck=pool[Math.floor(Math.random()*pool.length)];
+  animateSingleChecker(ck);
+}
+
+function animateSingleChecker(ck) {
+  syncBoard();
+  const moves=getCheckerMoves(ck);
+  const captures=moves.filter(m=>m.capture&&!m.capture.dying);
+  const chosen=captures.length
+    ? captures[Math.floor(Math.random()*captures.length)]
+    : (moves.length?moves[Math.floor(Math.random()*moves.length)]:null);
+
+  if (!chosen) { checkerTurnDone(); return; }
+
+  const capture=chosen.capture;
+  if (capture) capture.dying=true;
+  state.board[ck.row][ck.col]=null;
+
+  startAnim(ck, chosen.row, chosen.col, 280, ()=>{
+    if (capture) {
+      state.chessPieces=state.chessPieces.filter(p=>p.id!==capture.id);
+      state.capturedByCheckers.push(capture.type);
+    }
+    ck.row=chosen.row; ck.col=chosen.col;
+    if (!ck.isKing&&ck.row===ROWS-1) ck.isKing=true;
+    if (ck.row===3) state.enPassantCheckers.add(ck.id);
+    syncBoard(); updateUI(); renderStrips();
+
+    if (capture) {
+      const nextCaps=getCheckerMoves(ck).filter(m=>m.capture&&!m.capture.dying);
+      if (nextCaps.length) { setTimeout(()=>animateMultiJump(ck,checkerTurnDone),150); return; }
+    }
+    checkerTurnDone();
+  });
+}
+
+function animateMultiJump(ck, onDone) {
+  syncBoard();
+  const captures=getCheckerMoves(ck).filter(m=>m.capture&&!m.capture.dying);
+  if (!captures.length) { onDone(); return; }
+
+  const chosen=captures[Math.floor(Math.random()*captures.length)];
+  const capture=chosen.capture;
+  capture.dying=true;
+  state.board[ck.row][ck.col]=null;
+
+  startAnim(ck, chosen.row, chosen.col, 220, ()=>{
+    state.chessPieces=state.chessPieces.filter(p=>p.id!==capture.id);
+    state.capturedByCheckers.push(capture.type);
+    ck.row=chosen.row; ck.col=chosen.col;
+    if (!ck.isKing&&ck.row===ROWS-1) ck.isKing=true;
+    if (ck.row===3) state.enPassantCheckers.add(ck.id);
+    syncBoard(); updateUI(); renderStrips();
+
+    const next=getCheckerMoves(ck).filter(m=>m.capture&&!m.capture.dying);
+    if (next.length) { setTimeout(()=>animateMultiJump(ck,onDone),150); }
+    else             { setTimeout(onDone,60); }
+  });
+}
+
+function checkerTurnDone() {
+  if (!state.chessPieces.some(p=>p.type==='king'&&!p.dying)) {
+    gameLost();
+  } else {
+    state.phase='player';
+  }
+}
+
+function getCheckerMoves(ck) {
+  const moves=[];
+  for (const dr of (ck.isKing?[1,-1]:[1])) {
+    for (const dc of [-1,1]) {
+      const nr=ck.row+dr, nc=ck.col+dc;
+      if (nr<0||nr>=ROWS||nc<0||nc>=COLS) continue;
+      const t=state.board[nr][nc];
+      if (!t)                  moves.push({row:nr,col:nc,capture:null});
+      else if (t.team==='chess') moves.push({row:nr,col:nc,capture:t});
+    }
+  }
+  return moves;
+}
+
+// ─── Wave / Game Events ───────────────────────────────────────────────────────
+function waveWon() {
+  state.phase='wave_end';
+  state.score+=50*state.wave;
+  updateUI();
+  const next=state.wave+1, cfg=getWaveConfig(next);
+  if (cfg.newPieceChoices.length>0) {
+    showMessage(`Wave ${state.wave} Cleared!`,
+      `+${50*state.wave} pts! Choose a new piece for wave ${next}.`,
+      ()=>showPiecePicker(cfg.newPieceChoices,next));
+  } else {
+    showMessage(`Wave ${state.wave} Cleared!`,
+      `+${50*state.wave} pts! Prepare for wave ${next}!`,
+      ()=>startWave(next,state.chessPieces));
+  }
+}
+
+function gameLost() {
+  state.phase='wave_end';
+  showMessage('Defeated!',`Your king fell. Final score: ${state.score}`,()=>{
+    state.score=0; state.nextId=0;
+    startWave(1,initialChessPieces());
+  });
+}
+
+function showPiecePicker(choices, nextWave) {
+  document.getElementById('piece-select').classList.remove('hidden');
+  const opts=document.getElementById('piece-options');
+  opts.innerHTML='';
+  for (const key of choices) {
+    const btn=document.createElement('button');
+    btn.className='piece-option-btn';
+    btn.textContent=PIECE_DEFS[key].name;
+    btn.onclick=()=>{
+      document.getElementById('piece-select').classList.add('hidden');
+      startWave(nextWave,[...state.chessPieces,{type:key,team:'chess',id:newId()}]);
+    };
+    opts.appendChild(btn);
+  }
+  state.phase='pick_piece';
+}
+
+// ─── Save / Load ──────────────────────────────────────────────────────────────
+const SAVE_KEY='cvsc_saves';
+
+function getSaves() {
+  try { return JSON.parse(localStorage.getItem(SAVE_KEY))||[null,null,null]; }
+  catch { return [null,null,null]; }
+}
+
+function saveGame(slot) {
+  const saves=getSaves();
+  saves[slot]={
+    wave:state.wave,score:state.score,nextId:state.nextId,
+    chessPieces:state.chessPieces.map(p=>({type:p.type,team:p.team,row:p.row,col:p.col,moved:p.moved,id:p.id})),
+    checkers:state.checkers.map(c=>({team:c.team,row:c.row,col:c.col,isKing:c.isKing,id:c.id})),
+    capturedByChess:state.capturedByChess,
+    capturedByCheckers:state.capturedByCheckers,
+    date:new Date().toLocaleString(),
+  };
+  try {
+    localStorage.setItem(SAVE_KEY,JSON.stringify(saves));
+  } catch {
+    alert('Could not save — localStorage unavailable.');
+    return;
+  }
+  renderSavePanel();
+}
+
+function loadGame(slot) {
+  const save=getSaves()[slot];
+  if (!save) return;
+  state.wave=save.wave; state.score=save.score; state.nextId=save.nextId;
+  state.chessPieces=save.chessPieces.map(p=>({...p,dying:false}));
+  state.checkers=save.checkers.map(c=>({...c,type:'checker',dying:false}));
+  state.capturedByChess=save.capturedByChess||[];
+  state.capturedByCheckers=save.capturedByCheckers||[];
+  state.selected=null; state.phase='player';
+  state.enPassantCheckers=new Set();
+  moveAnnotation=null;
+  syncBoard(); updateUI(); renderStrips();
+  document.getElementById('save-panel').classList.add('hidden');
+}
+
+function renderSavePanel() {
+  const saves=getSaves();
+  const container=document.getElementById('save-slots');
+  if (!container) return;
+  container.innerHTML='';
+  saves.forEach((save,i)=>{
+    const slot=document.createElement('div');
+    slot.className='save-slot';
+
+    const info=document.createElement('div');
+    info.className='slot-info';
+    if (save) {
+      info.innerHTML=`<strong>Wave ${save.wave}</strong> &mdash; ${save.score} pts<br><small>${save.date}</small>`;
+    } else {
+      info.textContent='Empty slot';
+    }
+
+    const btns=document.createElement('div');
+    btns.className='slot-btns';
+
+    const saveBtn=document.createElement('button');
+    saveBtn.className='slot-btn save-btn';
+    saveBtn.textContent='Save';
+    saveBtn.onclick=()=>saveGame(i);
+
+    const loadBtn=document.createElement('button');
+    loadBtn.className='slot-btn load-btn';
+    loadBtn.textContent='Load';
+    loadBtn.disabled=!save;
+    loadBtn.onclick=()=>loadGame(i);
+
+    btns.append(saveBtn,loadBtn);
+    slot.append(info,btns);
+    container.appendChild(slot);
+  });
+}
+
+document.getElementById('save-load-toggle').onclick=()=>{
+  const panel=document.getElementById('save-panel');
+  renderSavePanel();
+  panel.classList.toggle('hidden');
+};
+
+// ─── Captured Piece Strips ────────────────────────────────────────────────────
+function drawMiniPiece(drawCtx, key, cx, cy) {
+  if (!imgReady(key)) return;
+  const img=IMAGES[key];
+  const ratio=img.naturalWidth/img.naturalHeight;
+  let w,h;
+  if (ratio>=1) { w=MINI; h=MINI/ratio; }
+  else          { h=MINI; w=MINI*ratio; }
+  drawCtx.drawImage(img, cx-w/2, cy-h/2, w, h);
+}
+
+function renderStrips() {
+  const sw=leftStrip.width, sh=leftStrip.height;
+  const cx=sw/2, gap=MINI+3, topPad=14;
+
+  // Left strip: chess pieces lost to checkers
+  lctx.clearRect(0,0,sw,sh);
+  lctx.fillStyle='#111827'; lctx.fillRect(0,0,sw,sh);
+  lctx.save();
+  lctx.font='bold 8px sans-serif'; lctx.textAlign='center';
+  lctx.fillStyle='#e94560'; lctx.fillText('LOST',cx,9);
+  lctx.restore();
+  state.capturedByCheckers.forEach((type,i)=>{
+    drawMiniPiece(lctx, type, cx, topPad+i*gap+MINI/2);
+  });
+
+  // Right strip: checkers taken by chess player
+  rctx.clearRect(0,0,sw,sh);
+  rctx.fillStyle='#111827'; rctx.fillRect(0,0,sw,sh);
+  rctx.save();
+  rctx.font='bold 8px sans-serif'; rctx.textAlign='center';
+  rctx.fillStyle='#44dd44'; rctx.fillText('TOOK',cx,9);
+  rctx.restore();
+  state.capturedByChess.forEach(({isKing},i)=>{
+    drawMiniPiece(rctx, isKing?'checker_king':'checker', cx, topPad+i*gap+MINI/2);
+  });
+}
+
+// ─── UI ───────────────────────────────────────────────────────────────────────
+function updateUI() {
+  document.getElementById('wave-label').textContent=`Wave ${state.wave}`;
+  document.getElementById('score-label').textContent=`Score: ${state.score}`;
+}
+
+function showMessage(title, body, onContinue) {
+  const overlay=document.getElementById('message-overlay');
+  document.getElementById('message-title').textContent=title;
+  document.getElementById('message-body').textContent=body;
+  overlay.classList.remove('hidden');
+  document.getElementById('message-btn').onclick=()=>{
+    overlay.classList.add('hidden'); onContinue();
+  };
+}
+
+// ─── Rendering ────────────────────────────────────────────────────────────────
+function render() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawBoard();
+  drawCheckIndicator();
+  drawHighlights();
+
+  const animIds=new Set(activeAnims.keys());
+  for (const p of state.chessPieces) if (!animIds.has(p.id)) drawChessPiece(p);
+  for (const c of state.checkers)    if (!animIds.has(c.id)) drawChecker(c);
+  for (const p of state.chessPieces) if ( animIds.has(p.id)) drawChessPiece(p);
+  for (const c of state.checkers)    if ( animIds.has(c.id)) drawChecker(c);
+
+  drawAnnotation();
+}
+
+function drawBoard() {
+  for (let r=0;r<ROWS;r++)
+    for (let c=0;c<COLS;c++) {
+      ctx.fillStyle=(r+c)%2===0?CLR.lightSquare:CLR.darkSquare;
+      ctx.fillRect(c*CELL,r*CELL,CELL,CELL);
+    }
+}
+
+function drawCheckIndicator() {
+  if (state.phase!=='player') return;
+  const king=state.chessPieces.find(p=>p.type==='king'&&!p.dying);
+  if (!king||!isThreatenedByChecker(king.row,king.col,state.board)) return;
+  const pulse=0.28+0.18*Math.sin(performance.now()/180);
+  ctx.fillStyle=`rgba(255,0,0,${pulse})`;
+  ctx.fillRect(king.col*CELL,king.row*CELL,CELL,CELL);
+}
+
+function drawHighlights() {
+  if (!state.selected) return;
+  const {piece,moves}=state.selected;
+  ctx.fillStyle=CLR.selected;
+  ctx.fillRect(piece.col*CELL,piece.row*CELL,CELL,CELL);
+
+  for (const [mr,mc] of moves) {
+    const target=state.board[mr]?.[mc];
+    let isCapture=target?.team==='checker';
+    if (!isCapture&&piece.type==='pawn'&&piece.row===3&&mc!==piece.col&&!target) {
+      const side=state.board[piece.row]?.[mc];
+      if (side?.team==='checker'&&state.enPassantCheckers.has(side.id)) isCapture=true;
+    }
+    ctx.fillStyle=isCapture?CLR.attackHL:CLR.highlight;
+    ctx.fillRect(mc*CELL,mr*CELL,CELL,CELL);
+    if (isCapture) {
+      if (piece.type==='pawn'&&piece.row===3&&mc!==piece.col&&!target) {
+        ctx.strokeStyle='rgba(255,80,80,0.8)'; ctx.lineWidth=3; ctx.setLineDash([4,3]);
+        ctx.beginPath(); ctx.arc(mc*CELL+CELL/2,piece.row*CELL+CELL/2,CELL*0.38,0,Math.PI*2);
+        ctx.stroke(); ctx.setLineDash([]);
+      }
+    } else {
+      ctx.beginPath(); ctx.arc(mc*CELL+CELL/2,mr*CELL+CELL/2,12,0,Math.PI*2);
+      ctx.fillStyle='rgba(0,180,80,0.6)'; ctx.fill();
+    }
+  }
+}
+
+// ── Piece drawing ─────────────────────────────────────────────────────────────
+// Contain-fit: fills CELL without stretching, centered on (x,y).
+function drawPieceImage(key, x, y) {
+  const img=IMAGES[key];
+  const pad=6, maxW=CELL-pad*2, maxH=CELL-pad*2;
+  const ratio=img.naturalWidth/img.naturalHeight;
+  let w,h;
+  if (ratio>=1) { w=maxW; h=maxW/ratio; }
+  else          { h=maxH; w=maxH*ratio; }
+  ctx.drawImage(img, x-w/2, y-h/2, w, h);
+}
+
+function drawChessPiece(p) {
+  const {x,y}=getPieceRenderPos(p);
+  const r=CELL*0.38;
+  ctx.save();
+  ctx.shadowColor='rgba(0,0,0,0.5)';
+  ctx.shadowBlur=activeAnims.has(p.id)?14:6;
+  if (imgReady(p.type)) {
+    drawPieceImage(p.type,x,y);
+  } else {
+    switch(p.type) {
+      case 'pawn':   drawPawnShape(x,y,r,CLR.chess); break;
+      case 'knight': drawKnightShape(x,y,r,CLR.chess); break;
+      case 'bishop': drawBishopShape(x,y,r,CLR.chess); break;
+      case 'rook':   drawRookShape(x,y,r,CLR.chess); break;
+      case 'queen':  drawQueenShape(x,y,r,CLR.chess); break;
+      case 'king':   drawKingShape(x,y,r,CLR.chess); break;
+    }
+    ctx.shadowBlur=0;
+    ctx.fillStyle='#333'; ctx.font=`bold ${Math.round(r*0.7)}px serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(PIECE_DEFS[p.type].symbol,x,y);
+  }
+  ctx.restore();
+}
+
+function drawChecker(c) {
+  const {x,y}=getPieceRenderPos(c);
+  const r=CELL*0.38;
+  ctx.save();
+  ctx.shadowColor='rgba(0,0,0,0.5)';
+  ctx.shadowBlur=activeAnims.has(c.id)?14:6;
+  const imgKey=c.isKing?'checker_king':'checker';
+  if (imgReady(imgKey)) {
+    drawPieceImage(imgKey,x,y);
+  } else {
+    ctx.beginPath(); ctx.ellipse(x,y+5,r,r*0.3,0,0,Math.PI*2);
+    ctx.fillStyle='rgba(0,0,0,0.3)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    const g=ctx.createRadialGradient(x-r*0.3,y-r*0.3,r*0.1,x,y,r);
+    g.addColorStop(0,'#e74c3c'); g.addColorStop(1,'#c0392b');
+    ctx.fillStyle=g; ctx.fill();
+    ctx.strokeStyle='#7b0000'; ctx.lineWidth=2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(x,y,r*0.65,0,Math.PI*2);
+    ctx.strokeStyle='rgba(255,160,160,0.5)'; ctx.lineWidth=2; ctx.stroke();
+    if (c.isKing) {
+      ctx.shadowBlur=0; ctx.fillStyle='#f39c12';
+      ctx.font=`bold ${Math.round(r*0.7)}px serif`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('♔',x,y);
+    }
+  }
+  ctx.restore();
+}
+
+// ── Vector fallback shapes ────────────────────────────────────────────────────
+function drawPawnShape(x,y,r,clr) {
+  ctx.beginPath(); ctx.ellipse(x,y+r*0.6,r*0.7,r*0.25,0,0,Math.PI*2);
+  ctx.fillStyle=clr.outline; ctx.fill();
+  ctx.beginPath(); ctx.rect(x-r*0.15,y-r*0.2,r*0.3,r*0.7);
+  ctx.fillStyle=clr.body; ctx.fill(); ctx.strokeStyle=clr.outline; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(x,y-r*0.3,r*0.38,0,Math.PI*2);
+  const g=ctx.createRadialGradient(x-r*0.1,y-r*0.4,0,x,y-r*0.3,r*0.38);
+  g.addColorStop(0,'#fff'); g.addColorStop(1,clr.body);
+  ctx.fillStyle=g; ctx.fill(); ctx.strokeStyle=clr.outline; ctx.lineWidth=1.5; ctx.stroke();
+}
+function drawKnightShape(x,y,r,clr) {
+  ctx.beginPath(); ctx.ellipse(x,y+r*0.6,r*0.75,r*0.25,0,0,Math.PI*2);
+  ctx.fillStyle=clr.outline; ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x-r*0.2,y+r*0.5); ctx.lineTo(x-r*0.45,y+r*0.1);
+  ctx.lineTo(x-r*0.5,y-r*0.2); ctx.lineTo(x-r*0.3,y-r*0.6);
+  ctx.lineTo(x+r*0.1,y-r*0.8); ctx.lineTo(x+r*0.45,y-r*0.5);
+  ctx.lineTo(x+r*0.5,y-r*0.1); ctx.lineTo(x+r*0.35,y+r*0.5); ctx.closePath();
+  const g=ctx.createLinearGradient(x-r,y-r,x+r,y+r);
+  g.addColorStop(0,'#fff'); g.addColorStop(1,clr.body);
+  ctx.fillStyle=g; ctx.fill(); ctx.strokeStyle=clr.outline; ctx.lineWidth=1.5; ctx.stroke();
+}
+function drawBishopShape(x,y,r,clr) {
+  ctx.beginPath(); ctx.ellipse(x,y+r*0.6,r*0.7,r*0.25,0,0,Math.PI*2);
+  ctx.fillStyle=clr.outline; ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x-r*0.45,y+r*0.5);
+  ctx.bezierCurveTo(x-r*0.45,y,x-r*0.2,y-r*0.5,x,y-r*0.9);
+  ctx.bezierCurveTo(x+r*0.2,y-r*0.5,x+r*0.45,y,x+r*0.45,y+r*0.5); ctx.closePath();
+  const g=ctx.createLinearGradient(x-r,y-r,x+r,y+r);
+  g.addColorStop(0,'#fff'); g.addColorStop(1,clr.body);
+  ctx.fillStyle=g; ctx.fill(); ctx.strokeStyle=clr.outline; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(x,y-r*0.85,r*0.15,0,Math.PI*2);
+  ctx.fillStyle=clr.accent; ctx.fill(); ctx.stroke();
+}
+function drawRookShape(x,y,r,clr) {
+  ctx.beginPath(); ctx.ellipse(x,y+r*0.6,r*0.75,r*0.25,0,0,Math.PI*2);
+  ctx.fillStyle=clr.outline; ctx.fill();
+  ctx.beginPath(); ctx.rect(x-r*0.4,y-r*0.5,r*0.8,r*1.0);
+  const g=ctx.createLinearGradient(x-r,y,x+r,y);
+  g.addColorStop(0,'#fff'); g.addColorStop(1,clr.body);
+  ctx.fillStyle=g; ctx.fill(); ctx.strokeStyle=clr.outline; ctx.lineWidth=1.5; ctx.stroke();
+  for (let i=-1;i<=1;i++) {
+    ctx.beginPath(); ctx.rect(x+i*r*0.28-r*0.14,y-r*0.85,r*0.25,r*0.38);
+    ctx.fillStyle=clr.body; ctx.fill(); ctx.strokeStyle=clr.outline; ctx.lineWidth=1.5; ctx.stroke();
+  }
+}
+function drawQueenShape(x,y,r,clr) {
+  ctx.beginPath(); ctx.ellipse(x,y+r*0.6,r*0.78,r*0.28,0,0,Math.PI*2);
+  ctx.fillStyle=clr.outline; ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x-r*0.5,y+r*0.5);
+  ctx.bezierCurveTo(x-r*0.5,y-r*0.1,x-r*0.25,y-r*0.4,x,y-r*0.6);
+  ctx.bezierCurveTo(x+r*0.25,y-r*0.4,x+r*0.5,y-r*0.1,x+r*0.5,y+r*0.5); ctx.closePath();
+  const g=ctx.createLinearGradient(x-r,y-r,x+r,y+r);
+  g.addColorStop(0,'#fff'); g.addColorStop(1,clr.body);
+  ctx.fillStyle=g; ctx.fill(); ctx.strokeStyle=clr.outline; ctx.lineWidth=1.5; ctx.stroke();
+  for (const [ox,oy] of [[-r*0.4,-r*0.55],[0,-r*0.75],[r*0.4,-r*0.55]]) {
+    ctx.beginPath(); ctx.arc(x+ox,y+oy,r*0.13,0,Math.PI*2);
+    ctx.fillStyle='#ffd700'; ctx.fill(); ctx.stroke();
+  }
+}
+function drawKingShape(x,y,r,clr) {
+  ctx.beginPath(); ctx.ellipse(x,y+r*0.6,r*0.78,r*0.28,0,0,Math.PI*2);
+  ctx.fillStyle=clr.outline; ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x-r*0.48,y+r*0.5);
+  ctx.bezierCurveTo(x-r*0.48,y-r*0.1,x-r*0.22,y-r*0.4,x,y-r*0.55);
+  ctx.bezierCurveTo(x+r*0.22,y-r*0.4,x+r*0.48,y-r*0.1,x+r*0.48,y+r*0.5); ctx.closePath();
+  const g=ctx.createLinearGradient(x-r,y-r,x+r,y+r);
+  g.addColorStop(0,'#fff'); g.addColorStop(1,clr.body);
+  ctx.fillStyle=g; ctx.fill(); ctx.strokeStyle=clr.outline; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.strokeStyle='#d4af37'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(x,y-r*0.5); ctx.lineTo(x,y-r*0.9); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x-r*0.22,y-r*0.72); ctx.lineTo(x+r*0.22,y-r*0.72); ctx.stroke();
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+startWave(1, initialChessPieces());
+requestAnimationFrame(gameLoop);
