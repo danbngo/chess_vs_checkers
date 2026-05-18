@@ -163,7 +163,8 @@ function showShop(earned, nextWave) {
   document.getElementById('shop-continue').textContent = `Start Wave ${nextWave}`;
   document.getElementById('shop-continue').onclick = () => {
     document.getElementById('shop-overlay').classList.add('hidden');
-    startWave(nextWave, state.chessPieces);
+    if (state.campaign === 'go') startGoWave(nextWave, state.chessPieces);
+    else startWave(nextWave, state.chessPieces);
   };
   document.getElementById('shop-overlay').classList.remove('hidden');
 }
@@ -203,9 +204,13 @@ function waveWon() {
 
 function gameLost() {
   state.phase = 'wave_end';
-  showMessage('Defeated!', `Your king fell. You had $${state.dollars}.`, () => {
+  const msg = state.campaign === 'go'
+    ? `Your king was surrounded by Go stones. You had $${state.dollars}.`
+    : `Your king fell. You had $${state.dollars}.`;
+  showMessage('Defeated!', msg, () => {
     state.dollars = 0; state.shop = []; state.moveCount = 0; state.nextId = 0;
-    startWave(1, initialChessPieces());
+    if (state.campaign === 'go') startGoWave(1, initialChessPieces());
+    else startWave(1, initialChessPieces());
   });
 }
 
@@ -220,6 +225,7 @@ function getSaves() {
 function saveGame(slot) {
   const saves = getSaves();
   saves[slot] = {
+    campaign: state.campaign,
     wave: state.wave, dollars: state.dollars, moveCount: state.moveCount,
     waveCheckerCount: state.waveCheckerCount, shop: state.shop, nextId: state.nextId,
     chessPieces: state.chessPieces.map(p => ({
@@ -230,12 +236,15 @@ function saveGame(slot) {
       team: c.team, row: c.row, col: c.col, isLight: c.isLight ?? false,
       isKing: c.isKing, isFlyingKing: c.isFlyingKing ?? false, isTripleKing: c.isTripleKing ?? false, id: c.id,
     })),
+    goPieces: state.goPieces.map(g => ({ team: g.team, row: g.row, col: g.col, id: g.id })),
     revivedPieces: state.revivedPieces.map(p => ({
       type: p.type, team: p.team, row: p.row, col: p.col,
       moved: p.moved, id: p.id, trait: p.trait ?? null, promotedFrom: p.promotedFrom ?? null,
     })),
     capturedByChess:    state.capturedByChess,
     capturedByCheckers: state.capturedByCheckers,
+    capturedByGo:       state.capturedByGo,
+    capturedGoByChess:  state.capturedGoByChess,
     date: new Date().toLocaleString(),
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(saves)); }
@@ -245,7 +254,8 @@ function saveGame(slot) {
 function loadGame(slot) {
   const save = getSaves()[slot];
   if (!save) return;
-  activeAnims.clear(); // cancel any in-flight animations from the previous game state
+  activeAnims.clear();
+  state.campaign         = save.campaign         || 'checkers';
   state.wave             = save.wave;
   state.dollars          = save.dollars          || 0;
   state.moveCount        = save.moveCount        || 0;
@@ -253,10 +263,13 @@ function loadGame(slot) {
   state.shop             = save.shop             || [];
   state.nextId           = save.nextId;
   state.chessPieces      = save.chessPieces.map(p => ({ ...p, dying: false }));
-  state.checkers         = save.checkers.map(c  => ({ ...c, type: 'checker', dying: false }));
+  state.checkers         = (save.checkers || []).map(c => ({ ...c, type: 'checker', dying: false }));
+  state.goPieces         = (save.goPieces  || []);
   state.revivedPieces    = (save.revivedPieces || []).map(p => ({ ...p, dying: false }));
   state.capturedByChess    = save.capturedByChess    || [];
   state.capturedByCheckers = save.capturedByCheckers || [];
+  state.capturedByGo       = save.capturedByGo       || [];
+  state.capturedGoByChess  = save.capturedGoByChess  || [];
   state.selected = null; state.phase = 'player';
   state.enPassantCheckers = new Set();
   moveAnnotation = null;
@@ -276,7 +289,8 @@ function renderMenuSlots() {
     const info = document.createElement('div');
     info.className = 'slot-info';
     if (save) {
-      info.innerHTML = `<strong>Wave ${save.wave}</strong> &mdash; $${save.dollars||0}<br><small>${save.date}</small>`;
+      const camp = save.campaign === 'go' ? 'Go' : 'Checkers';
+      info.innerHTML = `<strong>${camp} Wave ${save.wave}</strong> &mdash; $${save.dollars||0}<br><small>${save.date}</small>`;
     } else {
       info.textContent = 'Empty slot';
     }

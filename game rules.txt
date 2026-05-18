@@ -1,3 +1,7 @@
+═══════════════════════════════════
+ CAMPAIGN 1: VS CHECKERS
+═══════════════════════════════════
+
 basic rules:
 
 WAVES:
@@ -61,3 +65,33 @@ VARIANT PIECES (appear from wave halfway onwards, reaching normal shop frequency
 - Berolina Pawn ($10): mirror of the standard pawn — moves diagonally forward, captures straight ahead. Can move two squares diagonally from its starting rank. Orange tint.
 - Camel ($18): leaps in a 3+1 L-shape (like a knight but 3 squares in one direction, 1 perpendicular). Always lands on the opposite tile color. Brown tint.
 - Nightrider ($38): repeatedly leaps in the same knight direction until blocked. Captures the first enemy it reaches and stops. Deep purple tint.
+
+═══════════════════════════════════
+ CAMPAIGN 2: VS GO
+═══════════════════════════════════
+
+OBJECTIVE:
+- capture all go stones on the board to win each wave
+- chess pieces land on a go stone to capture it (standard chess capture)
+
+GO STONE PLACEMENT:
+- after each of your moves, the go AI places one new stone on an empty square
+- go stones never move — they accumulate across your turn
+
+ENCLOSURE (the main threat):
+- if go stones completely wall off a region (no orthogonal path to the board edge without crossing a go stone), every chess piece inside that region is instantly removed
+- if your king is in an enclosed region when it is sealed, you lose the game immediately
+- check and checkmate rules do NOT apply in the go campaign — only enclosure threatens your king
+
+MOVEMENT RESTRICTION:
+- chess pieces cannot voluntarily move into an already-enclosed region
+- squares blocked by enclosure are highlighted in red when you select a piece (same as illegal moves)
+- capturing a go stone is always allowed even if it is on the boundary of an enclosed region
+
+DIFFICULTY:
+- each wave starts with more go stones already placed (5 on wave 1, increasing by 3 per wave)
+- the go AI prefers to extend existing stone formations to build walls
+
+NOTES:
+- go stones cannot be "counter-surrounded" by chess pieces — only chess pieces die to enclosure
+- traits, shops, and variant pieces work exactly the same as in the checkers campaign

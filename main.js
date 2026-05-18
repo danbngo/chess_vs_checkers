@@ -36,7 +36,13 @@ function renderTitleSaveSlots() {
 
 document.getElementById('new-game-btn').onclick = () => {
   document.getElementById('title-screen').classList.add('hidden');
+  state.campaign = 'checkers';
   startWave(1, initialChessPieces());
+};
+
+document.getElementById('new-go-btn').onclick = () => {
+  document.getElementById('title-screen').classList.add('hidden');
+  startGoWave(1, initialChessPieces());
 };
 
 renderTitleSaveSlots();

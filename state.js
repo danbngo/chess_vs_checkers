@@ -1,5 +1,6 @@
 // ─── Game state ───────────────────────────────────────────────────────────────
 let state = {
+  campaign: 'checkers',
   wave: 1,
   dollars: 0,
   moveCount: 0,
@@ -8,13 +9,16 @@ let state = {
   board: null,
   chessPieces: [],
   checkers: [],
+  goPieces: [],
   selected: null,
   phase: 'player',
   nextId: 0,
   enPassantCheckers: new Set(),
   capturedByChess: [],
   capturedByCheckers: [],
-  revivedPieces: [],  // iron pieces waiting to return next wave
+  capturedByGo: [],
+  capturedGoByChess: [],
+  revivedPieces: [],
 };
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -26,6 +30,7 @@ function syncBoard() {
   state.board = emptyBoard();
   for (const p of state.chessPieces) if (!p.dying) state.board[p.row][p.col] = p;
   for (const c of state.checkers)    if (!c.dying) state.board[c.row][c.col] = c;
+  for (const g of state.goPieces)                  state.board[g.row][g.col] = g;
 }
 
 // ─── Placement helpers ────────────────────────────────────────────────────────

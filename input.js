@@ -45,16 +45,20 @@ function executeChessMove(piece, toRow, toCol) {
 
   state.moveCount++;
   state.selected = null; state.phase = 'animating';
-  state.enPassantCheckers = new Set();
+  if (state.campaign !== 'go') state.enPassantCheckers = new Set();
   state.board[piece.row][piece.col] = null;
-  if (target)    target.dying    = true;
+  if (target?.team === 'go') state.goPieces = state.goPieces.filter(g => g.id !== target.id);
+  else if (target)    target.dying    = true;
   if (epCapture) epCapture.dying = true;
 
   startAnim(piece, toRow, toCol, 280, () => {
     piece.row = toRow; piece.col = toCol; piece.moved = true;
 
     const finishMove = (wasPromotion) => {
-      if (target) {
+      if (target?.team === 'go') {
+        // goPieces already removed at move start; just record the capture
+        state.capturedGoByChess.push({ id: target.id });
+      } else if (target?.team === 'checker') {
         state.checkers = state.checkers.filter(c => c.id !== target.id);
         state.capturedByChess.push({ isKing: target.isKing, isLight: target.isLight ?? false });
       }
@@ -63,23 +67,26 @@ function executeChessMove(piece, toRow, toCol) {
         state.capturedByChess.push({ isKing: epCapture.isKing, isLight: epCapture.isLight ?? false });
       }
       // Raider: earns $1 per capture
-      if (piece.trait === 'raider' && (target || epCapture)) {
-        state.dollars++;
-      }
+      if (piece.trait === 'raider' && (target || epCapture)) state.dollars++;
       // Mercenary: 1/3 chance to desert after making a capture
-      if (piece.trait === 'mercenary' && (target || epCapture)) {
-        if (Math.random() < 1/3) {
-          state.chessPieces = state.chessPieces.filter(p => p.id !== piece.id);
-        }
-      }
+      if (piece.trait === 'mercenary' && (target || epCapture) && Math.random() < 1/3)
+        state.chessPieces = state.chessPieces.filter(p => p.id !== piece.id);
+
       syncBoard(); updateUI(); renderStrips();
 
       const ann = evaluateMove(piece, fromRow, fromCol, wasThreatenedBefore,
         target ?? epCapture, wasPromotion);
       showMoveAnnotation(ann, toCol, toRow);
 
-      if (state.checkers.filter(c => !c.dying).length === 0) {
+      const allEnemiesDead = state.campaign === 'go'
+        ? state.goPieces.length === 0
+        : state.checkers.filter(c => !c.dying).length === 0;
+
+      if (allEnemiesDead) {
         waveWon();
+      } else if (state.campaign === 'go') {
+        state.phase = 'go_move';
+        setTimeout(runGoTurn, 350);
       } else {
         state.phase = 'checker_move';
         setTimeout(runCheckerTurn, 350);

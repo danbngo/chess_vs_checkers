@@ -36,7 +36,18 @@ function isKingInCheckAfterMove(piece, toRow, toCol, epCol) {
 
 function getLegalMoves(piece) {
   const raw = PIECE_DEFS[piece.type].getMoves(piece.row, piece.col, state.board);
-  // With 2+ kings no piece is restricted from moving into "check"
+
+  if (state.campaign === 'go') {
+    // Go campaign: no check rules, but pieces can't land on enclosed empty squares
+    const reach = findReachableSquares();
+    return raw.filter(([mr, mc]) => {
+      const dest = state.board[mr]?.[mc];
+      if (dest?.team === 'go') return true;   // capturing a go stone is always allowed
+      return reach[mr]?.[mc] ?? false;         // can't enter enclosed empty squares
+    });
+  }
+
+  // Checkers campaign: standard check/check-avoidance logic
   if (state.chessPieces.filter(p => p.type === 'king' && !p.dying).length >= 2) return raw;
   return raw.filter(([mr, mc]) => {
     let epCol;

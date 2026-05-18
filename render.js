@@ -244,34 +244,63 @@ function renderStrips() {
   const sw = leftStrip.width, sh = leftStrip.height;
   const cx = sw/2, gap = MINI+3, topPad = 14;
 
+  // Left strip: chess pieces lost to enemy action
   lctx.clearRect(0, 0, sw, sh);
   lctx.fillStyle = '#111827'; lctx.fillRect(0, 0, sw, sh);
   lctx.save();
   lctx.font = 'bold 8px sans-serif'; lctx.textAlign = 'center';
   lctx.fillStyle = '#e94560'; lctx.fillText('LOST', cx, 9);
   lctx.restore();
-  state.capturedByCheckers.forEach((type, i) => {
+  const lostList = state.campaign === 'go' ? state.capturedByGo : state.capturedByCheckers;
+  lostList.forEach((type, i) => {
     drawMiniPiece(lctx, type, cx, topPad + i*gap + MINI/2, TINT_CHESS);
   });
 
+  // Right strip: enemies captured by chess
   rctx.clearRect(0, 0, sw, sh);
   rctx.fillStyle = '#111827'; rctx.fillRect(0, 0, sw, sh);
   rctx.save();
   rctx.font = 'bold 8px sans-serif'; rctx.textAlign = 'center';
   rctx.fillStyle = '#44dd44'; rctx.fillText('TOOK', cx, 9);
   rctx.restore();
-  state.capturedByChess.forEach(({ isKing, isLight }, i) => {
-    const tint = isLight ? TINT_CHECKER_LIGHT : TINT_CHECKER;
-    drawMiniPiece(rctx, isKing ? 'checker_king' : 'checker', cx, topPad + i*gap + MINI/2, tint);
-  });
+  if (state.campaign === 'go') {
+    state.capturedGoByChess.forEach((_, i) => {
+      const cy = topPad + i*gap + MINI/2, r = MINI/2 - 2;
+      rctx.fillStyle = '#111';
+      rctx.beginPath(); rctx.arc(cx, cy, r, 0, Math.PI*2); rctx.fill();
+    });
+  } else {
+    state.capturedByChess.forEach(({ isKing, isLight }, i) => {
+      const tint = isLight ? TINT_CHECKER_LIGHT : TINT_CHECKER;
+      drawMiniPiece(rctx, isKing ? 'checker_king' : 'checker', cx, topPad + i*gap + MINI/2, tint);
+    });
+  }
+}
+
+// ─── Go piece rendering ───────────────────────────────────────────────────────
+function drawGoPiece(g) {
+  const x = g.col * CELL + CELL/2, y = g.row * CELL + CELL/2;
+  const r = CELL * 0.36;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  ctx.shadowBlur  = 7;
+  ctx.fillStyle   = '#111';
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur  = 0;
+  // Subtle specular highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.13)';
+  ctx.beginPath(); ctx.arc(x - r*0.28, y - r*0.32, r*0.42, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
 }
 
 // ─── Board rendering ──────────────────────────────────────────────────────────
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawBoard();
-  drawCheckIndicator();
+  if (state.campaign !== 'go') drawCheckIndicator();
   drawHighlights();
+
+  for (const g of state.goPieces) drawGoPiece(g);
 
   const animIds = new Set(activeAnims.keys());
   for (const p of state.chessPieces) if (!animIds.has(p.id)) drawChessPiece(p);
