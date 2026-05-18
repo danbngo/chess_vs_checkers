@@ -40,28 +40,34 @@ function pickTrait(wave) {
 
 function waveShopAdditions(wave) {
   const livePieces = state.chessPieces.filter(p => !p.dying);
-  let backSpace  = 8 - livePieces.filter(p => p.type !== 'pawn').length
-                     - state.shop.filter(s => s.type !== 'pawn').length;
-  let frontSpace = 8 - livePieces.filter(p => p.type === 'pawn').length
-                     - state.shop.filter(s => s.type === 'pawn').length;
+  let backSpace  = 8 - livePieces.filter(p => !isFrontRowType(p.type)).length
+                     - state.shop.filter(s => !isFrontRowType(s.type)).length;
+  let frontSpace = 8 - livePieces.filter(p => isFrontRowType(p.type)).length
+                     - state.shop.filter(s => isFrontRowType(s.type)).length;
 
   if (backSpace <= 0 && frontSpace <= 0) return [];
 
-  const backPool = ['knight', 'knight', 'bishop', 'bishop'];
+  const backPool  = ['knight', 'knight', 'bishop', 'bishop'];
+  const frontPool = ['pawn', 'pawn'];
   if (wave >= 3) backPool.push('rook', 'king');
   if (wave >= 5) backPool.push('queen');
-  // Variant pieces: linear ramp from 0% at wave floor(MAX_WAVE/2) to full weight at final shop
   const variantStart = Math.floor(MAX_WAVE / 2);
   if (wave > variantStart) {
     const scale = (wave - variantStart) / Math.max(1, MAX_WAVE - 1 - variantStart);
-    const slots = Math.ceil(scale * 2); // 1 entry at low end, 2 at final shop
-    for (let s = 0; s < slots; s++) backPool.push('amazon');
+    const slots = Math.ceil(scale * 2);
+    for (let s = 0; s < slots; s++) {
+      backPool.push('amazon', 'archbishop', 'chancellor', 'grasshopper', 'camel', 'nightrider');
+      frontPool.push('berolina_pawn');
+    }
   }
 
   const count = Math.min(2 + Math.floor((wave - 1) / 2), 5);
   const picks = [];
 
-  if (frontSpace > 0) { picks.push('pawn'); frontSpace--; }
+  if (frontSpace > 0) {
+    picks.push(frontPool[Math.floor(Math.random() * frontPool.length)]);
+    frontSpace--;
+  }
 
   let tries = 0;
   while (picks.length < count && tries < 30) {
@@ -73,7 +79,7 @@ function waveShopAdditions(wave) {
       picks.push(backPool[Math.floor(Math.random() * backPool.length)]);
       backSpace--;
     } else {
-      picks.push('pawn');
+      picks.push(frontPool[Math.floor(Math.random() * frontPool.length)]);
       frontSpace--;
     }
   }
@@ -104,10 +110,10 @@ function showShop(earned, nextWave) {
     const container = document.getElementById('shop-items');
     container.innerHTML = '';
 
-    const liveNonPawns = state.chessPieces.filter(p => !p.dying && p.type !== 'pawn').length;
-    const livePawns    = state.chessPieces.filter(p => !p.dying && p.type === 'pawn').length;
+    const liveNonPawns = state.chessPieces.filter(p => !p.dying && !isFrontRowType(p.type)).length;
+    const livePawns    = state.chessPieces.filter(p => !p.dying &&  isFrontRowType(p.type)).length;
     const backFull  = liveNonPawns >= 8;
-    const frontFull = livePawns >= 8;
+    const frontFull = livePawns    >= 8;
 
     // Track counts for canonical position label (best-guess slot for each type)
     const labelCounts = {};
@@ -116,8 +122,7 @@ function showShop(earned, nextWave) {
     });
 
     state.shop.forEach((item, i) => {
-      const isPawn = item.type === 'pawn';
-      const full   = isPawn ? frontFull : backFull;
+      const full = isFrontRowType(item.type) ? frontFull : backFull;
 
       const idx       = labelCounts[item.type] || 0;
       labelCounts[item.type] = idx + 1;

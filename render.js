@@ -12,7 +12,13 @@ for (const [key, src] of [
   ['checker_king',        'images/checker_king.png'],
   ['checker_flying_king', 'images/checker_flying_king.png'],
   ['checker_triple_king', 'images/checker_triple_king.png'],
-  ['amazon',              'images/amazon.png'], // replace with dedicated art when available
+  ['amazon',        'images/amazon.png'],
+  ['archbishop',    'images/archbishop.png'],
+  ['chancellor',    'images/chancellor.png'],
+  ['grasshopper',   'images/grasshopper.png'],
+  ['berolina_pawn', 'images/berolina_pawn.png'],
+  ['camel',         'images/camel.png'],
+  ['nightrider',    'images/nightrider.png'],
 ]) {
   const img = new Image();
   img.onload = () => {
@@ -336,6 +342,17 @@ function drawHighlights() {
 // ─── Piece drawing ────────────────────────────────────────────────────────────
 const TRAIT_OUTLINE = { mercenary: 'rgba(255,215,0,0.92)', iron: 'rgba(130,210,255,0.92)', raider: 'rgba(255,100,0,0.92)' };
 
+// Fallback image key + distinctive tint for each variant, used until dedicated art is loaded.
+const VARIANT_RENDER = {
+  amazon:        { fallback: 'queen',  tint: TINT_AMAZON      },
+  archbishop:    { fallback: 'bishop', tint: TINT_ARCHBISHOP  },
+  chancellor:    { fallback: 'rook',   tint: TINT_CHANCELLOR  },
+  grasshopper:   { fallback: 'queen',  tint: TINT_GRASSHOPPER },
+  berolina_pawn: { fallback: 'pawn',   tint: TINT_BEROLINA    },
+  camel:         { fallback: 'knight', tint: TINT_CAMEL       },
+  nightrider:    { fallback: 'knight', tint: TINT_NIGHTRIDER  },
+};
+
 // Draw the piece tinted with outlineColor at 4 diagonal offsets to create an outline effect.
 function drawOutline(key, x, y, outlineColor) {
   const img = IMAGES[key];
@@ -364,15 +381,16 @@ function drawPieceImage(key, x, y, tintColor) {
 
 function drawChessPiece(p) {
   const { x, y } = getPieceRenderPos(p);
-  // Amazon falls back to queen image until images/amazon.png is provided
-  const imgKey = (p.type === 'amazon' && !imgReady('amazon')) ? 'queen' : p.type;
+  const vr     = VARIANT_RENDER[p.type];
+  const imgKey = vr && !imgReady(p.type) ? vr.fallback : p.type;
+  const tint   = vr ? vr.tint : TINT_CHESS;
   if (!imgReady(imgKey)) return;
   const outlineColor = TRAIT_OUTLINE[p.trait];
   if (outlineColor) drawOutline(imgKey, x, y, outlineColor);
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.5)';
   ctx.shadowBlur  = activeAnims.has(p.id) ? 14 : 6;
-  drawPieceImage(imgKey, x, y, p.type === 'amazon' ? TINT_AMAZON : TINT_CHESS);
+  drawPieceImage(imgKey, x, y, tint);
   ctx.restore();
 }
 

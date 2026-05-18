@@ -14,7 +14,11 @@ const lctx = leftStrip.getContext('2d');
 const rctx = rightStrip.getContext('2d');
 
 // ─── Tuning ───────────────────────────────────────────────────────────────────
-const PIECE_COSTS    = { pawn: 8, knight: 25, bishop: 25, rook: 40, queen: 70, king: 60, amazon: 110 };
+const PIECE_COSTS    = {
+  pawn: 8, knight: 25, bishop: 25, rook: 40, queen: 70, king: 60,
+  amazon: 110, archbishop: 55, chancellor: 70, grasshopper: 22,
+  berolina_pawn: 10, camel: 18, nightrider: 38,
+};
 const FLYING_KING_WAVE = 5;
 const MAX_WAVE = 10;
 
@@ -30,5 +34,12 @@ const CLR = {
 
 const TINT_CHESS         = 'rgba(255,255,255,0.55)';
 const TINT_CHECKER       = 'rgba(0,0,0,0.5)';
-const TINT_CHECKER_LIGHT = 'rgba(220,80,40,0.65)';  // red-orange tint for light-square checkers
-const TINT_AMAZON        = 'rgba(200,120,255,0.6)';  // purple tint; replace images/amazon.png when art is ready
+const TINT_CHECKER_LIGHT = 'rgba(220,80,40,0.65)';
+// Variant piece tints (used as fallback until dedicated art is added)
+const TINT_AMAZON        = 'rgba(200,120,255,0.6)';
+const TINT_ARCHBISHOP    = 'rgba(0,210,90,0.65)';
+const TINT_CHANCELLOR    = 'rgba(0,200,220,0.65)';
+const TINT_GRASSHOPPER   = 'rgba(170,220,0,0.65)';
+const TINT_BEROLINA      = 'rgba(255,150,40,0.65)';
+const TINT_CAMEL         = 'rgba(180,120,55,0.65)';
+const TINT_NIGHTRIDER    = 'rgba(110,50,230,0.65)';

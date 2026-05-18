@@ -86,11 +86,12 @@ function executeChessMove(piece, toRow, toCol) {
       }
     };
 
-    // Pawn reaching back rank: show promotion choice (queen or knight)
-    if (piece.type === 'pawn' && piece.row === 0) {
+    // Pawn/berolina pawn reaching back rank: show promotion choice (queen or knight)
+    if (isFrontRowType(piece.type) && piece.row === 0) {
+      const origType = piece.type;
       showPromotion(piece, (newType) => {
         piece.type         = newType;
-        piece.promotedFrom = 'pawn'; // remembered so it reverts at wave end
+        piece.promotedFrom = origType; // remembered so it reverts at wave end
         finishMove(true);
       });
     } else {

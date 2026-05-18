@@ -54,4 +54,10 @@ TRAITS (appear more often in later waves, never in the first shop — scales lin
 - Raider (orange outline): costs 1.5x, earns $1 every time it captures an enemy
 
 VARIANT PIECES (appear from wave halfway onwards, reaching normal shop frequency by the final shop):
-- Amazon: moves like a queen AND a knight combined. Costs $110. Visually shown with a purple tint.
+- Amazon ($110): moves like a queen AND a knight combined. Purple tint.
+- Archbishop ($55): moves like a bishop AND a knight combined. Controls both colors. Green tint.
+- Chancellor ($70): moves like a rook AND a knight combined. Dominates open files. Cyan tint.
+- Grasshopper ($22): slides like a queen but must jump over exactly one piece and land directly behind it. Captures if an enemy is on the landing square. Yellow-green tint.
+- Berolina Pawn ($10): mirror of the standard pawn — moves diagonally forward, captures straight ahead. Can move two squares diagonally from its starting rank. Orange tint.
+- Camel ($18): leaps in a 3+1 L-shape (like a knight but 3 squares in one direction, 1 perpendicular). Always lands on the opposite tile color. Brown tint.
+- Nightrider ($38): repeatedly leaps in the same knight direction until blocked. Captures the first enemy it reaches and stops. Deep purple tint.

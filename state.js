@@ -71,7 +71,7 @@ function assignPlacements(pieces) {
   const result     = [];
   const typeCounts = {};
 
-  for (const p of pieces.filter(q => q.type !== 'pawn')) {
+  for (const p of pieces.filter(q => !isFrontRowType(q.type))) {
     const idx       = typeCounts[p.type] ?? 0;
     typeCounts[p.type] = idx + 1;
     const canonical = (CHESS_SLOTS[p.type] || [])[idx];
@@ -86,7 +86,7 @@ function assignPlacements(pieces) {
   }
 
   let pawnIdx = 0;
-  for (const p of pieces.filter(q => q.type === 'pawn')) {
+  for (const p of pieces.filter(q => isFrontRowType(q.type))) {
     const canonical = (CHESS_SLOTS.pawn || [])[pawnIdx++];
     if (canonical && !takenFront.has(canonical[1])) {
       takenFront.add(canonical[1]);
