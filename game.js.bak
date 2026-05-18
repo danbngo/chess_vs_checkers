@@ -13,11 +13,15 @@ const rightStrip = document.getElementById('right-strip');
 const lctx = leftStrip.getContext('2d');
 const rctx = rightStrip.getContext('2d');
 
+const PIECE_COSTS = { pawn: 8, knight: 25, bishop: 25, rook: 40, queen: 70 };
+const FLYING_KING_WAVE = 5;
+
 const CLR = {
   lightSquare: '#f0d9b5',
   darkSquare:  '#b58863',
   highlight:   'rgba(0,200,100,0.45)',
-  attackHL:    'rgba(220,50,50,0.5)',
+  attackHL:    'rgba(50,120,220,0.55)',
+  illegalHL:   'rgba(220,50,50,0.45)',
   selected:    'rgba(50,150,255,0.5)',
   chess:       { body: '#e8e8e8', outline: '#222', accent: '#aaa' },
   checker:     { body: '#c0392b', outline: '#7b0000', accent: '#e74c3c' },
@@ -25,6 +29,10 @@ const CLR = {
 
 // ─── Image Assets ─────────────────────────────────────────────────────────────
 const IMAGES = {};
+const tintCache = {};
+const TINT_CHESS   = 'rgba(255,255,255,0.55)';
+const TINT_CHECKER = 'rgba(0,0,0,0.5)';
+
 for (const [key, src] of [
   ['pawn',         'images/pawn.png'],
   ['knight',       'images/knight.png'],
@@ -35,13 +43,33 @@ for (const [key, src] of [
   ['checker_king', 'images/checker_king.png'],
 ]) {
   const img = new Image();
-  img.onload = () => renderStrips(); // refresh strips once image loads
+  img.onload = () => {
+    for (const k of Object.keys(tintCache)) {
+      if (k.startsWith(key + '|')) delete tintCache[k];
+    }
+    renderStrips();
+  };
   img.src = src;
   IMAGES[key] = img;
 }
 function imgReady(key) {
   const img = IMAGES[key];
   return img && img.complete && img.naturalWidth > 0;
+}
+function getTinted(key, tintColor) {
+  const cKey = key + '|' + tintColor;
+  if (tintCache[cKey]) return tintCache[cKey];
+  if (!imgReady(key)) return null;
+  const img = IMAGES[key];
+  const off = document.createElement('canvas');
+  off.width = img.naturalWidth; off.height = img.naturalHeight;
+  const octx = off.getContext('2d');
+  octx.drawImage(img, 0, 0);
+  octx.globalCompositeOperation = 'source-atop';
+  octx.fillStyle = tintColor;
+  octx.fillRect(0, 0, off.width, off.height);
+  tintCache[cKey] = off;
+  return off;
 }
 
 // ─── Animation System ─────────────────────────────────────────────────────────
@@ -56,7 +84,7 @@ function startAnim(piece, toRow, toCol, duration, onComplete) {
   });
 }
 
-function easeInOut(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+function easeInOut(t) { return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2; }
 
 function getPieceRenderPos(piece) {
   const anim = activeAnims.get(piece.id);
@@ -93,13 +121,24 @@ const ANNOTATION = {
 };
 
 function isThreatenedByChecker(row, col, board) {
-  for (const hdc of [-1, 1]) {
-    const ar=row-1, ac=col+hdc;
-    if (ar>=0 && ac>=0 && ac<COLS && board[ar]?.[ac]?.team==='checker') return true;
-    const br=row+1, bc=col+hdc;
-    if (br<ROWS && bc>=0 && bc<COLS) {
-      const p=board[br]?.[bc];
-      if (p?.team==='checker' && p.isKing) return true;
+  const flyingActive = state.wave >= FLYING_KING_WAVE;
+  for (const [dr,dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
+    // Landing square (where the checker would end up after jumping over row,col)
+    const lr=row+dr, lc=col+dc;
+    if (lr<0||lr>=ROWS||lc<0||lc>=COLS||board[lr]?.[lc]) continue;
+    // Scan backward along the diagonal for a threatening checker
+    let r=row-dr, c=col-dc, dist=1;
+    while (r>=0&&r<ROWS&&c>=0&&c<COLS) {
+      const p=board[r]?.[c];
+      if (p) {
+        if (p.team==='checker') {
+          if (p.isKing  && (dist===1||flyingActive)) return true;
+          if (!p.isKing && dist===1 && dr>0)         return true; // forward only
+        }
+        break;
+      }
+      if (!flyingActive) break;
+      r-=dr; c-=dc; dist++;
     }
   }
   return false;
@@ -235,35 +274,39 @@ function slidingMoves(r,c,board,dirs) {
 
 // ─── Wave Config ──────────────────────────────────────────────────────────────
 const WAVE_CONFIG = [
-  { checkerCount:3,  newPieceChoices:[] },
-  { checkerCount:5,  newPieceChoices:['knight','bishop'] },
-  { checkerCount:6,  newPieceChoices:['rook','bishop'] },
-  { checkerCount:8,  newPieceChoices:['rook','knight'] },
-  { checkerCount:10, newPieceChoices:['queen','rook'] },
-  { checkerCount:12, newPieceChoices:['queen','knight'], kingsAt:4 },
+  { checkerCount:3  },
+  { checkerCount:5  },
+  { checkerCount:6  },
+  { checkerCount:8  },
+  { checkerCount:10 },
+  { checkerCount:12, kingsAt:4 },
 ];
 
 function getWaveConfig(wave) {
   if (wave<=WAVE_CONFIG.length) return WAVE_CONFIG[wave-1];
   const last=WAVE_CONFIG[WAVE_CONFIG.length-1];
-  return { checkerCount:last.checkerCount+(wave-WAVE_CONFIG.length)*2,
-           newPieceChoices:last.newPieceChoices, kingsAt:last.kingsAt };
+  return { checkerCount:last.checkerCount+(wave-WAVE_CONFIG.length)*2, kingsAt:last.kingsAt };
 }
 
 // ─── Game State ───────────────────────────────────────────────────────────────
 let state = {
-  wave:1, score:0,
+  wave:1,
+  dollars:0,
+  moveCount:0,
+  waveCheckerCount:0,
+  shop:[],
   board:null,
   chessPieces:[], checkers:[],
   selected:null, phase:'player',
   nextId:0,
   enPassantCheckers: new Set(),
-  capturedByChess:    [], // { isKing } — checkers taken by player
-  capturedByCheckers: [], // string piece type — chess pieces taken by checkers
+  capturedByChess:    [],
+  capturedByCheckers: [],
 };
 
 function newId() { return state.nextId++; }
 function emptyBoard() { return Array.from({length:ROWS},()=>Array(COLS).fill(null)); }
+function toChessNotation(row,col) { return String.fromCharCode(97+col)+(8-row); }
 
 function syncBoard() {
   state.board=emptyBoard();
@@ -309,11 +352,13 @@ function startWave(wave, chessPieces) {
     enPassantCheckers: new Set(),
     capturedByChess:    [],
     capturedByCheckers: [],
+    moveCount: 0,
   });
   moveAnnotation=null;
 
   const typeCounts={};
-  state.chessPieces=chessPieces.map(p=>{
+  // Only keep alive pieces — filter defensively so dying pieces never bleed into the next wave.
+  state.chessPieces=chessPieces.filter(p=>!p.dying).map(p=>{
     if (!typeCounts[p.type]) typeCounts[p.type]=0;
     const [row,col]=getChessSlot(p.type,typeCounts[p.type]++);
     return {...p, row, col, moved:false, dying:false, id:p.id??newId()};
@@ -326,7 +371,11 @@ function startWave(wave, chessPieces) {
     dying:false,id:newId(),
   }));
 
+  state.waveCheckerCount=state.checkers.length;
   syncBoard(); updateUI(); renderStrips();
+  if (wave===FLYING_KING_WAVE)
+    showMessage('Flying Kings!',
+      'Checker kings can now slide diagonally any distance and threaten from afar.', ()=>{});
 }
 
 function initialChessPieces() {
@@ -396,6 +445,7 @@ function executeChessMove(piece, toRow, toCol) {
     if (adj?.team==='checker'&&state.enPassantCheckers.has(adj.id)) epCapture=adj;
   }
 
+  state.moveCount++;
   state.selected=null; state.phase='animating';
   state.enPassantCheckers=new Set();
   state.board[piece.row][piece.col]=null;
@@ -410,12 +460,10 @@ function executeChessMove(piece, toRow, toCol) {
 
     if (target) {
       state.checkers=state.checkers.filter(c=>c.id!==target.id);
-      state.score+=target.isKing?20:10;
       state.capturedByChess.push({isKing:target.isKing});
     }
     if (epCapture) {
       state.checkers=state.checkers.filter(c=>c.id!==epCapture.id);
-      state.score+=epCapture.isKing?20:10;
       state.capturedByChess.push({isKing:epCapture.isKing});
     }
     syncBoard(); updateUI(); renderStrips();
@@ -444,6 +492,14 @@ function runCheckerTurn() {
 
   const alive=state.checkers.filter(c=>!c.dying);
   if (!alive.length) { checkerTurnDone(); return; }
+
+  if (!alive.some(ck=>getCheckerMoves(ck).length>0)) {
+    state.phase='wave_end';
+    updateUI();
+    showMessage('Stalemate!','The checkers have no moves. You earn $0 this wave.',
+      ()=>showShop(0, state.wave+1));
+    return;
+  }
 
   const capturers=alive.filter(ck=>getCheckerMoves(ck).some(m=>m.capture));
   const pool=capturers.length>0?capturers:alive;
@@ -510,65 +566,149 @@ function animateMultiJump(ck, onDone) {
 function checkerTurnDone() {
   if (!state.chessPieces.some(p=>p.type==='king'&&!p.dying)) {
     gameLost();
-  } else {
-    state.phase='player';
+    return;
+  }
+  state.phase='player';
+  syncBoard();
+  const hasMove=state.chessPieces.filter(p=>!p.dying).some(p=>getLegalMoves(p).length>0);
+  if (!hasMove) {
+    state.phase='wave_end';
+    updateUI();
+    showMessage('Stalemate!','You have no valid moves. You earn $0 this wave.',
+      ()=>showShop(0, state.wave+1));
   }
 }
 
 function getCheckerMoves(ck) {
   const moves=[];
-  for (const dr of (ck.isKing?[1,-1]:[1])) {
-    for (const dc of [-1,1]) {
+  const flying = ck.isKing && state.wave >= FLYING_KING_WAVE;
+  const dirs = ck.isKing ? [[-1,-1],[-1,1],[1,-1],[1,1]] : [[1,-1],[1,1]];
+
+  for (const [dr,dc] of dirs) {
+    if (flying) {
+      // Slide along diagonal; first chess piece encountered can be jumped (land 1 beyond)
+      let r=ck.row+dr, c=ck.col+dc;
+      while (r>=0&&r<ROWS&&c>=0&&c<COLS) {
+        const t=state.board[r][c];
+        if (!t) {
+          moves.push({row:r,col:c,capture:null});
+        } else if (t.team==='chess') {
+          const lr=r+dr, lc=c+dc;
+          if (lr>=0&&lr<ROWS&&lc>=0&&lc<COLS&&!state.board[lr][lc])
+            moves.push({row:lr,col:lc,capture:t});
+          break;
+        } else break; // blocked by another checker
+        r+=dr; c+=dc;
+      }
+    } else {
+      // Normal: step adjacent; capture = jump over enemy, land 1 beyond (must be empty)
       const nr=ck.row+dr, nc=ck.col+dc;
       if (nr<0||nr>=ROWS||nc<0||nc>=COLS) continue;
       const t=state.board[nr][nc];
-      if (!t)                  moves.push({row:nr,col:nc,capture:null});
-      else if (t.team==='chess') moves.push({row:nr,col:nc,capture:t});
+      if (!t) {
+        moves.push({row:nr,col:nc,capture:null});
+      } else if (t.team==='chess') {
+        const lr=nr+dr, lc=nc+dc;
+        if (lr>=0&&lr<ROWS&&lc>=0&&lc<COLS&&!state.board[lr][lc])
+          moves.push({row:lr,col:lc,capture:t});
+      }
     }
   }
   return moves;
 }
 
+// ─── Earnings & Shop ─────────────────────────────────────────────────────────
+function calcEarnings(moveCount, checkerCount) {
+  const max=Math.max(10, checkerCount*12);
+  const ratio=moveCount/Math.max(1,checkerCount);
+  if (ratio<=2) return max;
+  if (ratio>=5) return 1;
+  const t=(ratio-2)/3;
+  return Math.max(1, Math.round(max - t*(max-1)));
+}
+
+function waveShopAdditions(wave) {
+  const pool=['pawn'];
+  if (wave>=1) pool.push('knight');
+  if (wave>=2) pool.push('bishop');
+  if (wave>=3) pool.push('rook');
+  if (wave>=5) pool.push('queen');
+  const count=Math.min(2+Math.floor((wave-1)/2), 5);
+  const picks=['pawn'];
+  for (let i=1;i<count;i++) picks.push(pool[Math.floor(Math.random()*pool.length)]);
+  return picks.map(type=>({type, cost:PIECE_COSTS[type]}));
+}
+
+function showShop(earned, nextWave) {
+  state.dollars+=earned;
+  state.shop.push(...waveShopAdditions(state.wave));
+  state.phase='shop';
+
+  document.getElementById('shop-title').textContent=`Wave ${state.wave} Cleared!`;
+  document.getElementById('shop-earnings').textContent=
+    `+$${earned}  (${state.moveCount} moves · ${state.waveCheckerCount} checkers)`;
+
+  const refresh=()=>{
+    document.getElementById('shop-balance').textContent=`Balance: $${state.dollars}`;
+    const container=document.getElementById('shop-items');
+    container.innerHTML='';
+
+    // Build per-type slot index starting from how many the player already owns
+    const slotIdx={};
+    state.chessPieces.filter(p=>!p.dying).forEach(p=>{
+      slotIdx[p.type]=(slotIdx[p.type]||0)+1;
+    });
+
+    state.shop.forEach((item,i)=>{
+      const idx=slotIdx[item.type]||0;
+      const slots=CHESS_SLOTS[item.type]||[];
+      const full=idx>=slots.length;
+      const pos=full?null:toChessNotation(slots[idx][0],slots[idx][1]);
+      slotIdx[item.type]=idx+1; // reserve this slot for subsequent shop items of same type
+
+      const div=document.createElement('div');
+      div.className='shop-item';
+      const nm=document.createElement('div'); nm.className='shop-item-name';
+      nm.textContent=pos?`${pos.toUpperCase()} ${PIECE_DEFS[item.type].name}`:PIECE_DEFS[item.type].name;
+      const cs=document.createElement('div'); cs.className='shop-item-cost'; cs.textContent=`$${item.cost}`;
+      const btn=document.createElement('button'); btn.className='shop-buy-btn';
+      btn.textContent=full?'Full':'Buy';
+      btn.disabled=full||state.dollars<item.cost;
+      btn.onclick=()=>{
+        if(full||state.dollars<item.cost) return;
+        state.dollars-=item.cost;
+        state.shop.splice(i,1);
+        state.chessPieces.push({type:item.type,team:'chess',id:newId(),dying:false,moved:false,row:0,col:0});
+        refresh();
+      };
+      div.append(nm,cs,btn);
+      container.appendChild(div);
+    });
+  };
+
+  refresh();
+  document.getElementById('shop-continue').textContent=`Start Wave ${nextWave}`;
+  document.getElementById('shop-continue').onclick=()=>{
+    document.getElementById('shop-overlay').classList.add('hidden');
+    startWave(nextWave, state.chessPieces);
+  };
+  document.getElementById('shop-overlay').classList.remove('hidden');
+}
+
 // ─── Wave / Game Events ───────────────────────────────────────────────────────
 function waveWon() {
   state.phase='wave_end';
-  state.score+=50*state.wave;
   updateUI();
-  const next=state.wave+1, cfg=getWaveConfig(next);
-  if (cfg.newPieceChoices.length>0) {
-    showMessage(`Wave ${state.wave} Cleared!`,
-      `+${50*state.wave} pts! Choose a new piece for wave ${next}.`,
-      ()=>showPiecePicker(cfg.newPieceChoices,next));
-  } else {
-    showMessage(`Wave ${state.wave} Cleared!`,
-      `+${50*state.wave} pts! Prepare for wave ${next}!`,
-      ()=>startWave(next,state.chessPieces));
-  }
+  const earned=calcEarnings(state.moveCount, state.waveCheckerCount);
+  showShop(earned, state.wave+1);
 }
 
 function gameLost() {
   state.phase='wave_end';
-  showMessage('Defeated!',`Your king fell. Final score: ${state.score}`,()=>{
-    state.score=0; state.nextId=0;
+  showMessage('Defeated!',`Your king fell. You had $${state.dollars}.`,()=>{
+    state.dollars=0; state.shop=[]; state.moveCount=0; state.nextId=0;
     startWave(1,initialChessPieces());
   });
-}
-
-function showPiecePicker(choices, nextWave) {
-  document.getElementById('piece-select').classList.remove('hidden');
-  const opts=document.getElementById('piece-options');
-  opts.innerHTML='';
-  for (const key of choices) {
-    const btn=document.createElement('button');
-    btn.className='piece-option-btn';
-    btn.textContent=PIECE_DEFS[key].name;
-    btn.onclick=()=>{
-      document.getElementById('piece-select').classList.add('hidden');
-      startWave(nextWave,[...state.chessPieces,{type:key,team:'chess',id:newId()}]);
-    };
-    opts.appendChild(btn);
-  }
-  state.phase='pick_piece';
 }
 
 // ─── Save / Load ──────────────────────────────────────────────────────────────
@@ -582,7 +722,8 @@ function getSaves() {
 function saveGame(slot) {
   const saves=getSaves();
   saves[slot]={
-    wave:state.wave,score:state.score,nextId:state.nextId,
+    wave:state.wave, dollars:state.dollars, moveCount:state.moveCount,
+    waveCheckerCount:state.waveCheckerCount, shop:state.shop, nextId:state.nextId,
     chessPieces:state.chessPieces.map(p=>({type:p.type,team:p.team,row:p.row,col:p.col,moved:p.moved,id:p.id})),
     checkers:state.checkers.map(c=>({team:c.team,row:c.row,col:c.col,isKing:c.isKing,id:c.id})),
     capturedByChess:state.capturedByChess,
@@ -601,7 +742,9 @@ function saveGame(slot) {
 function loadGame(slot) {
   const save=getSaves()[slot];
   if (!save) return;
-  state.wave=save.wave; state.score=save.score; state.nextId=save.nextId;
+  state.wave=save.wave; state.dollars=save.dollars||0; state.moveCount=save.moveCount||0;
+  state.waveCheckerCount=save.waveCheckerCount||0; state.shop=save.shop||[];
+  state.nextId=save.nextId;
   state.chessPieces=save.chessPieces.map(p=>({...p,dying:false}));
   state.checkers=save.checkers.map(c=>({...c,type:'checker',dying:false}));
   state.capturedByChess=save.capturedByChess||[];
@@ -625,7 +768,7 @@ function renderSavePanel() {
     const info=document.createElement('div');
     info.className='slot-info';
     if (save) {
-      info.innerHTML=`<strong>Wave ${save.wave}</strong> &mdash; ${save.score} pts<br><small>${save.date}</small>`;
+      info.innerHTML=`<strong>Wave ${save.wave}</strong> &mdash; $${save.dollars||0}<br><small>${save.date}</small>`;
     } else {
       info.textContent='Empty slot';
     }
@@ -657,14 +800,15 @@ document.getElementById('save-load-toggle').onclick=()=>{
 };
 
 // ─── Captured Piece Strips ────────────────────────────────────────────────────
-function drawMiniPiece(drawCtx, key, cx, cy) {
+function drawMiniPiece(drawCtx, key, cx, cy, tintColor) {
   if (!imgReady(key)) return;
   const img=IMAGES[key];
   const ratio=img.naturalWidth/img.naturalHeight;
   let w,h;
   if (ratio>=1) { w=MINI; h=MINI/ratio; }
   else          { h=MINI; w=MINI*ratio; }
-  drawCtx.drawImage(img, cx-w/2, cy-h/2, w, h);
+  const src = tintColor ? (getTinted(key, tintColor) || img) : img;
+  drawCtx.drawImage(src, cx-w/2, cy-h/2, w, h);
 }
 
 function renderStrips() {
@@ -679,7 +823,7 @@ function renderStrips() {
   lctx.fillStyle='#e94560'; lctx.fillText('LOST',cx,9);
   lctx.restore();
   state.capturedByCheckers.forEach((type,i)=>{
-    drawMiniPiece(lctx, type, cx, topPad+i*gap+MINI/2);
+    drawMiniPiece(lctx, type, cx, topPad+i*gap+MINI/2, TINT_CHESS);
   });
 
   // Right strip: checkers taken by chess player
@@ -690,14 +834,17 @@ function renderStrips() {
   rctx.fillStyle='#44dd44'; rctx.fillText('TOOK',cx,9);
   rctx.restore();
   state.capturedByChess.forEach(({isKing},i)=>{
-    drawMiniPiece(rctx, isKing?'checker_king':'checker', cx, topPad+i*gap+MINI/2);
+    drawMiniPiece(rctx, isKing?'checker_king':'checker', cx, topPad+i*gap+MINI/2, TINT_CHECKER);
   });
 }
 
 // ─── UI ───────────────────────────────────────────────────────────────────────
 function updateUI() {
   document.getElementById('wave-label').textContent=`Wave ${state.wave}`;
-  document.getElementById('score-label').textContent=`Score: ${state.score}`;
+  document.getElementById('moves-label').textContent=`Moves: ${state.moveCount}`;
+  document.getElementById('score-label').textContent=`$${state.dollars}`;
+  const pot=state.waveCheckerCount>0?calcEarnings(state.moveCount,state.waveCheckerCount):0;
+  document.getElementById('potential-label').textContent=pot>0?`(+$${pot})`:'';
 }
 
 function showMessage(title, body, onContinue) {
@@ -749,18 +896,28 @@ function drawHighlights() {
   ctx.fillStyle=CLR.selected;
   ctx.fillRect(piece.col*CELL,piece.row*CELL,CELL,CELL);
 
+  // Red: squares the piece could geometrically reach but can't due to check
+  const rawMoves=PIECE_DEFS[piece.type].getMoves(piece.row,piece.col,state.board);
+  const legalSet=new Set(moves.map(([r,c])=>r*COLS+c));
+  ctx.fillStyle=CLR.illegalHL;
+  for (const [mr,mc] of rawMoves) {
+    if (!legalSet.has(mr*COLS+mc)) ctx.fillRect(mc*CELL,mr*CELL,CELL,CELL);
+  }
+
+  // Blue: legal captures. Green: legal non-captures.
   for (const [mr,mc] of moves) {
     const target=state.board[mr]?.[mc];
     let isCapture=target?.team==='checker';
-    if (!isCapture&&piece.type==='pawn'&&piece.row===3&&mc!==piece.col&&!target) {
-      const side=state.board[piece.row]?.[mc];
-      if (side?.team==='checker'&&state.enPassantCheckers.has(side.id)) isCapture=true;
-    }
+    const isEP=!isCapture&&piece.type==='pawn'&&piece.row===3&&mc!==piece.col&&!target&&
+      state.enPassantCheckers.has(state.board[piece.row]?.[mc]?.id);
+    if (isEP) isCapture=true;
+
     ctx.fillStyle=isCapture?CLR.attackHL:CLR.highlight;
     ctx.fillRect(mc*CELL,mr*CELL,CELL,CELL);
+
     if (isCapture) {
-      if (piece.type==='pawn'&&piece.row===3&&mc!==piece.col&&!target) {
-        ctx.strokeStyle='rgba(255,80,80,0.8)'; ctx.lineWidth=3; ctx.setLineDash([4,3]);
+      if (isEP) {
+        ctx.strokeStyle='rgba(80,140,255,0.8)'; ctx.lineWidth=3; ctx.setLineDash([4,3]);
         ctx.beginPath(); ctx.arc(mc*CELL+CELL/2,piece.row*CELL+CELL/2,CELL*0.38,0,Math.PI*2);
         ctx.stroke(); ctx.setLineDash([]);
       }
@@ -773,14 +930,15 @@ function drawHighlights() {
 
 // ── Piece drawing ─────────────────────────────────────────────────────────────
 // Contain-fit: fills CELL without stretching, centered on (x,y).
-function drawPieceImage(key, x, y) {
+function drawPieceImage(key, x, y, tintColor) {
   const img=IMAGES[key];
   const pad=6, maxW=CELL-pad*2, maxH=CELL-pad*2;
   const ratio=img.naturalWidth/img.naturalHeight;
   let w,h;
   if (ratio>=1) { w=maxW; h=maxW/ratio; }
   else          { h=maxH; w=maxH*ratio; }
-  ctx.drawImage(img, x-w/2, y-h/2, w, h);
+  const src = tintColor ? (getTinted(key, tintColor) || img) : img;
+  ctx.drawImage(src, x-w/2, y-h/2, w, h);
 }
 
 function drawChessPiece(p) {
@@ -790,7 +948,7 @@ function drawChessPiece(p) {
   ctx.shadowColor='rgba(0,0,0,0.5)';
   ctx.shadowBlur=activeAnims.has(p.id)?14:6;
   if (imgReady(p.type)) {
-    drawPieceImage(p.type,x,y);
+    drawPieceImage(p.type,x,y,TINT_CHESS);
   } else {
     switch(p.type) {
       case 'pawn':   drawPawnShape(x,y,r,CLR.chess); break;
@@ -816,7 +974,7 @@ function drawChecker(c) {
   ctx.shadowBlur=activeAnims.has(c.id)?14:6;
   const imgKey=c.isKing?'checker_king':'checker';
   if (imgReady(imgKey)) {
-    drawPieceImage(imgKey,x,y);
+    drawPieceImage(imgKey,x,y,TINT_CHECKER);
   } else {
     ctx.beginPath(); ctx.ellipse(x,y+5,r,r*0.3,0,0,Math.PI*2);
     ctx.fillStyle='rgba(0,0,0,0.3)'; ctx.fill();

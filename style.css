@@ -27,7 +27,9 @@ body {
 }
 
 #wave-label  { font-size: 1.4em; font-weight: bold; color: #e94560; }
-#score-label { font-size: 1.2em; color: #a8dadc; }
+#moves-label { font-size: 1em; color: #7c9fc0; }
+#score-label    { font-size: 1.2em; color: #ffd700; font-weight: bold; }
+#potential-label { font-size: 0.88em; color: #44dd44; margin-left: 5px; opacity: 0.85; }
 
 #save-load-toggle {
   background: #0f3460;
@@ -188,5 +190,77 @@ body {
   line-height: 1.6;
 }
 #instructions p { margin-bottom: 6px; }
+
+/* ── Shop overlay ─────────────────────────────────────────────────────────── */
+#shop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+#shop-box {
+  background: #16213e;
+  border: 3px solid #e94560;
+  border-radius: 12px;
+  padding: 28px 32px;
+  max-width: 520px;
+  width: 92%;
+  text-align: center;
+}
+
+#shop-title    { font-size: 1.8em; color: #e94560; margin-bottom: 8px; }
+#shop-earnings { color: #44dd44; font-size: 0.97em; margin-bottom: 4px; }
+#shop-balance  { color: #ffd700; font-size: 1.15em; font-weight: bold; margin-bottom: 16px; }
+
+#shop-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 20px;
+  max-height: 270px;
+  overflow-y: auto;
+}
+
+.shop-item {
+  background: #0f3460;
+  border: 2px solid #2d6aac;
+  border-radius: 8px;
+  padding: 10px 14px;
+  min-width: 88px;
+  text-align: center;
+}
+
+.shop-item-name { font-size: 0.95em; color: #e0e0e0; margin-bottom: 4px; }
+.shop-item-cost { font-size: 0.85em; color: #ffd700; margin-bottom: 8px; }
+
+.shop-buy-btn {
+  background: #0f3d22;
+  border: 1px solid #2dac6a;
+  border-radius: 5px;
+  color: #a8f0c8;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 0.82em;
+  transition: background 0.15s;
+}
+.shop-buy-btn:disabled { opacity: 0.35; cursor: default; }
+.shop-buy-btn:hover:not(:disabled) { background: #1a6035; }
+
+#shop-continue {
+  background: #e94560;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  padding: 10px 28px;
+  font-size: 1.05em;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+#shop-continue:hover { background: #c73652; }
 
 .hidden { display: none !important; }
