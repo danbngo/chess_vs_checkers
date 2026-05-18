@@ -36,12 +36,30 @@ function fisherYates(arr) {
   }
 }
 
-function checkerStartPositions(count) {
-  const pri = [], ov = [];
-  for (let r = 0; r < 2; r++) for (let c = 0; c < COLS; c++) if ((r+c)%2===1) pri.push([r,c]);
-  for (let r = 2; r < 4; r++) for (let c = 0; c < COLS; c++) if ((r+c)%2===1) ov.push([r,c]);
-  fisherYates(pri); fisherYates(ov);
-  return [...pri, ...ov].slice(0, count);
+function checkerStartPositions(count, allowLight) {
+  // Dark squares: (r+c) % 2 === 1. Light squares: (r+c) % 2 === 0.
+  // Primary rows 0-1, overflow rows 2-3.
+  const darkPri  = [], darkOv  = [];
+  const lightPri = [], lightOv = [];
+  for (let r = 0; r < 2; r++) for (let c = 0; c < COLS; c++) {
+    ((r+c)%2===1 ? darkPri : lightPri).push([r,c]);
+  }
+  for (let r = 2; r < 4; r++) for (let c = 0; c < COLS; c++) {
+    ((r+c)%2===1 ? darkOv : lightOv).push([r,c]);
+  }
+  fisherYates(darkPri);  fisherYates(darkOv);
+  fisherYates(lightPri); fisherYates(lightOv);
+
+  if (!allowLight) {
+    return [...darkPri, ...darkOv].slice(0, count).map(pos => ({ pos, isLight: false }));
+  }
+
+  // Equal split: half dark, half light (round up dark for odd counts)
+  const darkCount  = Math.ceil(count / 2);
+  const lightCount = count - darkCount;
+  const darkSlots  = [...darkPri,  ...darkOv ].slice(0, darkCount).map(pos => ({ pos, isLight: false }));
+  const lightSlots = [...lightPri, ...lightOv].slice(0, lightCount).map(pos => ({ pos, isLight: true  }));
+  return [...darkSlots, ...lightSlots];
 }
 
 // ─── Placement ────────────────────────────────────────────────────────────────
@@ -104,13 +122,13 @@ function startWave(wave, chessPieces) {
       ...piece, row, col, moved: false, dying: false, id: piece.id ?? newId(),
     }));
 
-  const ckPos = checkerStartPositions(cfg.checkerCount);
+  const allowLight = wave >= 2;
+  const ckSlots = checkerStartPositions(cfg.checkerCount, allowLight);
   const hasStartKings = !!(cfg.kingsAt && cfg.kingsAt > 0);
-  state.checkers = ckPos.map(([r, c], i) => {
+  state.checkers = ckSlots.map(({ pos: [r, c], isLight }, i) => {
     const isKing = hasStartKings && i < cfg.kingsAt;
-    // First starting king is always flying; the rest are 50/50 — ensures a mix
     const isFlyingKing = isKing && wave >= FLYING_KING_WAVE && (i === 0 || Math.random() < 0.5);
-    return { type: 'checker', team: 'checker', row: r, col: c, isKing, isFlyingKing, dying: false, id: newId() };
+    return { type: 'checker', team: 'checker', row: r, col: c, isLight, isKing, isFlyingKing, isTripleKing: false, dying: false, id: newId() };
   });
 
   state.waveCheckerCount = state.checkers.length;

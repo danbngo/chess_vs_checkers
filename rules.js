@@ -77,8 +77,22 @@ function getCheckerMoves(ck) {
         moves.push({ row: nr, col: nc, capture: null });
       } else if (t.team === 'chess') {
         const lr = nr+dr, lc = nc+dc;
+        if (lr>=0 && lr<ROWS && lc>=0 && lc<COLS) {
+          const t2 = state.board[lr][lc];
+          if (!t2) {
+            moves.push({ row: lr, col: lc, capture: t });
+          } else if (ck.isTripleKing && t2.team === 'chess') {
+            // Double capture: jump over two consecutive enemies
+            const r3 = lr+dr, c3 = lc+dc;
+            if (r3>=0 && r3<ROWS && c3>=0 && c3<COLS && !state.board[r3][c3])
+              moves.push({ row: r3, col: c3, capture: t, capture2: t2 });
+          }
+        }
+      } else if (ck.isTripleKing) {
+        // Friendly hop over allied checker (never mandatory, piece is not sacrificed)
+        const lr = nr+dr, lc = nc+dc;
         if (lr>=0 && lr<ROWS && lc>=0 && lc<COLS && !state.board[lr][lc])
-          moves.push({ row: lr, col: lc, capture: t });
+          moves.push({ row: lr, col: lc, capture: null, isFriendlyHop: true });
       }
     }
   }
@@ -130,18 +144,21 @@ function animateSingleChecker(ck, mustCapture = false) {
 
   if (!chosen) { checkerTurnDone(); return; }
 
-  const capture = chosen.capture;
-  if (capture) capture.dying = true;
+  const capture  = chosen.capture;
+  const capture2 = chosen.capture2 ?? null;
+  if (capture)  capture.dying  = true;
+  if (capture2) capture2.dying = true;
   state.board[ck.row][ck.col] = null;
 
   startAnim(ck, chosen.row, chosen.col, 280, () => {
-    if (capture) applyCheckerCapture(capture);
+    if (capture)  applyCheckerCapture(capture);
+    if (capture2) applyCheckerCapture(capture2);
     ck.row = chosen.row; ck.col = chosen.col;
     if (!ck.isKing && ck.row === ROWS-1) {
       ck.isKing = true;
-      // Becomes flying king if any flying king is alive in the army
       ck.isFlyingKing = state.wave >= FLYING_KING_WAVE && state.checkers.some(c => c.isFlyingKing);
     }
+    if (ck.isKing && !ck.isTripleKing && ck.row === 0) ck.isTripleKing = true;
     if (ck.row === 3) state.enPassantCheckers.add(ck.id);
     syncBoard(); updateUI(); renderStrips();
 
@@ -158,19 +175,22 @@ function animateMultiJump(ck, onDone) {
   const captures = getCheckerMoves(ck).filter(m => m.capture && !m.capture.dying);
   if (!captures.length) { onDone(); return; }
 
-  const chosen  = captures[Math.floor(Math.random() * captures.length)];
-  const capture = chosen.capture;
+  const chosen   = captures[Math.floor(Math.random() * captures.length)];
+  const capture  = chosen.capture;
+  const capture2 = chosen.capture2 ?? null;
   capture.dying = true;
+  if (capture2) capture2.dying = true;
   state.board[ck.row][ck.col] = null;
 
   startAnim(ck, chosen.row, chosen.col, 220, () => {
     applyCheckerCapture(capture);
+    if (capture2) applyCheckerCapture(capture2);
     ck.row = chosen.row; ck.col = chosen.col;
     if (!ck.isKing && ck.row === ROWS-1) {
       ck.isKing = true;
-      // Becomes flying king if any flying king is alive in the army
       ck.isFlyingKing = state.wave >= FLYING_KING_WAVE && state.checkers.some(c => c.isFlyingKing);
     }
+    if (ck.isKing && !ck.isTripleKing && ck.row === 0) ck.isTripleKing = true;
     if (ck.row === 3) state.enPassantCheckers.add(ck.id);
     syncBoard(); updateUI(); renderStrips();
 

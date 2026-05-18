@@ -28,6 +28,7 @@ const CLR = {
   selected:    'rgba(50,150,255,0.5)',
 };
 
-const TINT_CHESS   = 'rgba(255,255,255,0.55)';
-const TINT_CHECKER = 'rgba(0,0,0,0.5)';
-const TINT_AMAZON  = 'rgba(200,120,255,0.6)';  // purple tint; replace images/amazon.png when art is ready
+const TINT_CHESS         = 'rgba(255,255,255,0.55)';
+const TINT_CHECKER       = 'rgba(0,0,0,0.5)';
+const TINT_CHECKER_LIGHT = 'rgba(220,80,40,0.65)';  // red-orange tint for light-square checkers
+const TINT_AMAZON        = 'rgba(200,120,255,0.6)';  // purple tint; replace images/amazon.png when art is ready

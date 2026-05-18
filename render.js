@@ -8,9 +8,11 @@ for (const [key, src] of [
   ['bishop',       'images/bishop.png'],
   ['queen',        'images/queen.png'],
   ['king',         'images/king.png'],
-  ['checker',      'images/checker.png'],
-  ['checker_king', 'images/checker_king.png'],
-  ['amazon',       'images/amazon.png'], // replace with dedicated art when available
+  ['checker',             'images/checker.png'],
+  ['checker_king',        'images/checker_king.png'],
+  ['checker_flying_king', 'images/checker_flying_king.png'],
+  ['checker_triple_king', 'images/checker_triple_king.png'],
+  ['amazon',              'images/amazon.png'], // replace with dedicated art when available
 ]) {
   const img = new Image();
   img.onload = () => {
@@ -78,6 +80,76 @@ function gameLoop() {
   for (const [id, anim] of done) { activeAnims.delete(id); anim.onComplete(); }
   render();
   requestAnimationFrame(gameLoop);
+}
+
+// ─── Hover tooltip ────────────────────────────────────────────────────────────
+let hoverTooltip = null; // { piece, mx, my }
+
+function drawTooltip() {
+  if (!hoverTooltip) return;
+  const { piece, mx, my } = hoverTooltip;
+  const def = PIECE_DEFS[piece.type];
+  if (!def) return;
+
+  const pos       = toChessNotation(piece.row, piece.col).toUpperCase();
+  const traitName = piece.trait
+    ? piece.trait.charAt(0).toUpperCase() + piece.trait.slice(1)
+    : null;
+
+  const lines = [
+    { text: `${def.name}  ${pos}`, bold: true, color: '#fff' },
+    { text: 'Owner: Chess', bold: false, color: '#aac8ff' },
+  ];
+  if (traitName) {
+    const traitColor = { Mercenary: '#ffd700', Iron: '#82d2ff', Raider: '#ff6400' }[traitName] || '#ccc';
+    lines.push({ text: `Trait: ${traitName}`, bold: false, color: traitColor });
+  }
+  if (def.description) {
+    const words = def.description.split(' ');
+    let line = '';
+    for (const w of words) {
+      if ((line + ' ' + w).trim().length > 34) {
+        lines.push({ text: line.trim(), bold: false, color: '#ddd' });
+        line = w;
+      } else {
+        line += (line ? ' ' : '') + w;
+      }
+    }
+    if (line) lines.push({ text: line.trim(), bold: false, color: '#ddd' });
+  }
+
+  ctx.save();
+  ctx.font = '13px sans-serif';
+  const lineH = 17, padX = 10, padY = 8;
+  const maxW  = lines.reduce((m, l) => {
+    ctx.font = l.bold ? 'bold 13px sans-serif' : '13px sans-serif';
+    return Math.max(m, ctx.measureText(l.text).width);
+  }, 0);
+  const bw = maxW + padX * 2, bh = lines.length * lineH + padY * 2;
+
+  let bx = mx + 14, by = my - bh / 2;
+  if (bx + bw > canvas.width)  bx = mx - bw - 14;
+  if (by < 2)                  by = 2;
+  if (by + bh > canvas.height) by = canvas.height - bh - 2;
+
+  ctx.fillStyle = 'rgba(15,20,35,0.93)';
+  ctx.strokeStyle = 'rgba(120,160,255,0.5)';
+  ctx.lineWidth = 1;
+  const r = 6;
+  ctx.beginPath();
+  ctx.moveTo(bx+r, by); ctx.lineTo(bx+bw-r, by); ctx.arcTo(bx+bw, by, bx+bw, by+r, r);
+  ctx.lineTo(bx+bw, by+bh-r); ctx.arcTo(bx+bw, by+bh, bx+bw-r, by+bh, r);
+  ctx.lineTo(bx+r, by+bh); ctx.arcTo(bx, by+bh, bx, by+bh-r, r);
+  ctx.lineTo(bx, by+r); ctx.arcTo(bx, by, bx+r, by, r);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+
+  lines.forEach((l, i) => {
+    ctx.font = l.bold ? 'bold 13px sans-serif' : '13px sans-serif';
+    ctx.fillStyle = l.color;
+    ctx.textBaseline = 'top';
+    ctx.fillText(l.text, bx + padX, by + padY + i * lineH);
+  });
+  ctx.restore();
 }
 
 // ─── Move annotation ──────────────────────────────────────────────────────────
@@ -182,8 +254,9 @@ function renderStrips() {
   rctx.font = 'bold 8px sans-serif'; rctx.textAlign = 'center';
   rctx.fillStyle = '#44dd44'; rctx.fillText('TOOK', cx, 9);
   rctx.restore();
-  state.capturedByChess.forEach(({ isKing }, i) => {
-    drawMiniPiece(rctx, isKing ? 'checker_king' : 'checker', cx, topPad + i*gap + MINI/2, TINT_CHECKER);
+  state.capturedByChess.forEach(({ isKing, isLight }, i) => {
+    const tint = isLight ? TINT_CHECKER_LIGHT : TINT_CHECKER;
+    drawMiniPiece(rctx, isKing ? 'checker_king' : 'checker', cx, topPad + i*gap + MINI/2, tint);
   });
 }
 
@@ -201,6 +274,7 @@ function render() {
   for (const c of state.checkers)    if ( animIds.has(c.id)) drawChecker(c);
 
   drawAnnotation();
+  drawTooltip();
 }
 
 function drawBoard() {
@@ -304,11 +378,14 @@ function drawChessPiece(p) {
 
 function drawChecker(c) {
   const { x, y } = getPieceRenderPos(c);
-  const imgKey = c.isKing ? 'checker_king' : 'checker';
+  const imgKey = c.isTripleKing ? 'checker_triple_king'
+               : c.isFlyingKing ? 'checker_flying_king'
+               : c.isKing       ? 'checker_king'
+               :                  'checker';
   if (!imgReady(imgKey)) return;
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.5)';
   ctx.shadowBlur  = activeAnims.has(c.id) ? 14 : 6;
-  drawPieceImage(imgKey, x, y, TINT_CHECKER);
+  drawPieceImage(imgKey, x, y, c.isLight ? TINT_CHECKER_LIGHT : TINT_CHECKER);
   ctx.restore();
 }

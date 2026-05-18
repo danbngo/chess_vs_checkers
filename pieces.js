@@ -19,6 +19,7 @@ function slidingMoves(r, c, board, dirs) {
 const PIECE_DEFS = {
   pawn: {
     name: 'Pawn', symbol: 'P', value: 1,
+    description: 'Moves one square forward. Can move two squares from its starting position. Captures diagonally. Promotes to Queen or Knight upon reaching the back rank.',
     getMoves(r, c, board) {
       const moves = [];
       if (r>0 && !board[r-1][c]) moves.push([r-1, c]);
@@ -39,6 +40,7 @@ const PIECE_DEFS = {
   },
   knight: {
     name: 'Knight', symbol: 'N', value: 3,
+    description: 'Moves in an L-shape: two squares in one direction then one square perpendicular. The only piece that can jump over others.',
     getMoves(r, c, board) {
       const moves = [];
       for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
@@ -51,20 +53,24 @@ const PIECE_DEFS = {
   },
   bishop: {
     name: 'Bishop', symbol: 'B', value: 3,
+    description: 'Slides any number of squares diagonally. Stays on its starting color throughout the game.',
     getMoves(r, c, board) { return slidingMoves(r, c, board, [[-1,-1],[-1,1],[1,-1],[1,1]]); }
   },
   rook: {
     name: 'Rook', symbol: 'R', value: 5,
+    description: 'Slides any number of squares horizontally or vertically. A powerful long-range attacker.',
     getMoves(r, c, board) { return slidingMoves(r, c, board, [[-1,0],[1,0],[0,-1],[0,1]]); }
   },
   queen: {
     name: 'Queen', symbol: 'Q', value: 9,
+    description: 'Slides any number of squares in any direction (horizontally, vertically, or diagonally). The most powerful piece on the board.',
     getMoves(r, c, board) {
       return slidingMoves(r, c, board, [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]]);
     }
   },
   king: {
     name: 'King', symbol: 'K', value: 0,
+    description: 'Moves one square in any direction. With only one king, losing it ends the game instantly. With two or more kings, check rules are suspended.',
     getMoves(r, c, board) {
       const moves = [];
       for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
@@ -77,6 +83,7 @@ const PIECE_DEFS = {
   },
   amazon: {
     name: 'Amazon', symbol: 'A', value: 12,
+    description: 'Combines the moves of a Queen and a Knight. The ultimate hybrid piece — slides in any direction AND leaps in an L-shape.',
     getMoves(r, c, board) {
       // Queen slides + knight leaps
       const moves = slidingMoves(r, c, board, [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]]);

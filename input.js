@@ -1,3 +1,16 @@
+// ─── Hover tooltip ────────────────────────────────────────────────────────────
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx   = e.clientX - rect.left;
+  const my   = e.clientY - rect.top;
+  const col  = Math.floor(mx / CELL);
+  const row  = Math.floor(my / CELL);
+  const p    = state.board?.[row]?.[col];
+  hoverTooltip = (p?.team === 'chess') ? { piece: p, mx, my } : null;
+});
+
+canvas.addEventListener('mouseleave', () => { hoverTooltip = null; });
+
 // ─── Player input ─────────────────────────────────────────────────────────────
 canvas.addEventListener('click', e => {
   if (state.phase !== 'player' || isAnyAnimating()) return;
@@ -43,11 +56,11 @@ function executeChessMove(piece, toRow, toCol) {
     const finishMove = (wasPromotion) => {
       if (target) {
         state.checkers = state.checkers.filter(c => c.id !== target.id);
-        state.capturedByChess.push({ isKing: target.isKing });
+        state.capturedByChess.push({ isKing: target.isKing, isLight: target.isLight ?? false });
       }
       if (epCapture) {
         state.checkers = state.checkers.filter(c => c.id !== epCapture.id);
-        state.capturedByChess.push({ isKing: epCapture.isKing });
+        state.capturedByChess.push({ isKing: epCapture.isKing, isLight: epCapture.isLight ?? false });
       }
       // Raider: earns $1 per capture
       if (piece.trait === 'raider' && (target || epCapture)) {

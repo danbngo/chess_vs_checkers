@@ -222,7 +222,8 @@ function saveGame(slot) {
       moved: p.moved, id: p.id, trait: p.trait ?? null, promotedFrom: p.promotedFrom ?? null,
     })),
     checkers: state.checkers.map(c => ({
-      team: c.team, row: c.row, col: c.col, isKing: c.isKing, isFlyingKing: c.isFlyingKing ?? false, id: c.id,
+      team: c.team, row: c.row, col: c.col, isLight: c.isLight ?? false,
+      isKing: c.isKing, isFlyingKing: c.isFlyingKing ?? false, isTripleKing: c.isTripleKing ?? false, id: c.id,
     })),
     revivedPieces: state.revivedPieces.map(p => ({
       type: p.type, team: p.team, row: p.row, col: p.col,
