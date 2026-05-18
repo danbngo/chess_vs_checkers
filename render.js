@@ -270,132 +270,21 @@ function drawPieceImage(key, x, y, tintColor) {
 
 function drawChessPiece(p) {
   const { x, y } = getPieceRenderPos(p);
-  const r = CELL * 0.38;
+  if (!imgReady(p.type)) return;
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.5)';
   ctx.shadowBlur  = activeAnims.has(p.id) ? 14 : 6;
-  if (imgReady(p.type)) {
-    drawPieceImage(p.type, x, y, TINT_CHESS);
-  } else {
-    switch (p.type) {
-      case 'pawn':   drawPawnShape(x, y, r, CLR.chess);   break;
-      case 'knight': drawKnightShape(x, y, r, CLR.chess); break;
-      case 'bishop': drawBishopShape(x, y, r, CLR.chess); break;
-      case 'rook':   drawRookShape(x, y, r, CLR.chess);   break;
-      case 'queen':  drawQueenShape(x, y, r, CLR.chess);  break;
-      case 'king':   drawKingShape(x, y, r, CLR.chess);   break;
-    }
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#333'; ctx.font = `bold ${Math.round(r*0.7)}px serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(PIECE_DEFS[p.type].symbol, x, y);
-  }
+  drawPieceImage(p.type, x, y, TINT_CHESS);
   ctx.restore();
 }
 
 function drawChecker(c) {
   const { x, y } = getPieceRenderPos(c);
-  const r = CELL * 0.38;
+  const imgKey = c.isKing ? 'checker_king' : 'checker';
+  if (!imgReady(imgKey)) return;
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.5)';
   ctx.shadowBlur  = activeAnims.has(c.id) ? 14 : 6;
-  const imgKey = c.isKing ? 'checker_king' : 'checker';
-  if (imgReady(imgKey)) {
-    drawPieceImage(imgKey, x, y, TINT_CHECKER);
-  } else {
-    ctx.beginPath(); ctx.ellipse(x, y+5, r, r*0.3, 0, 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fill();
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
-    const g = ctx.createRadialGradient(x-r*0.3, y-r*0.3, r*0.1, x, y, r);
-    g.addColorStop(0, '#e74c3c'); g.addColorStop(1, '#c0392b');
-    ctx.fillStyle = g; ctx.fill();
-    ctx.strokeStyle = '#7b0000'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.beginPath(); ctx.arc(x, y, r*0.65, 0, Math.PI*2);
-    ctx.strokeStyle = 'rgba(255,160,160,0.5)'; ctx.lineWidth = 2; ctx.stroke();
-    if (c.isKing) {
-      ctx.shadowBlur = 0; ctx.fillStyle = '#f39c12';
-      ctx.font = `bold ${Math.round(r*0.7)}px serif`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('♔', x, y);
-    }
-  }
+  drawPieceImage(imgKey, x, y, TINT_CHECKER);
   ctx.restore();
-}
-
-// ─── Vector fallback shapes ───────────────────────────────────────────────────
-function drawPawnShape(x, y, r, clr) {
-  ctx.beginPath(); ctx.ellipse(x, y+r*0.6, r*0.7, r*0.25, 0, 0, Math.PI*2);
-  ctx.fillStyle = clr.outline; ctx.fill();
-  ctx.beginPath(); ctx.rect(x-r*0.15, y-r*0.2, r*0.3, r*0.7);
-  ctx.fillStyle = clr.body; ctx.fill(); ctx.strokeStyle = clr.outline; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.beginPath(); ctx.arc(x, y-r*0.3, r*0.38, 0, Math.PI*2);
-  const g = ctx.createRadialGradient(x-r*0.1, y-r*0.4, 0, x, y-r*0.3, r*0.38);
-  g.addColorStop(0, '#fff'); g.addColorStop(1, clr.body);
-  ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = clr.outline; ctx.lineWidth = 1.5; ctx.stroke();
-}
-function drawKnightShape(x, y, r, clr) {
-  ctx.beginPath(); ctx.ellipse(x, y+r*0.6, r*0.75, r*0.25, 0, 0, Math.PI*2);
-  ctx.fillStyle = clr.outline; ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(x-r*0.2, y+r*0.5);   ctx.lineTo(x-r*0.45, y+r*0.1);
-  ctx.lineTo(x-r*0.5, y-r*0.2);   ctx.lineTo(x-r*0.3,  y-r*0.6);
-  ctx.lineTo(x+r*0.1, y-r*0.8);   ctx.lineTo(x+r*0.45, y-r*0.5);
-  ctx.lineTo(x+r*0.5, y-r*0.1);   ctx.lineTo(x+r*0.35, y+r*0.5); ctx.closePath();
-  const g = ctx.createLinearGradient(x-r, y-r, x+r, y+r);
-  g.addColorStop(0, '#fff'); g.addColorStop(1, clr.body);
-  ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = clr.outline; ctx.lineWidth = 1.5; ctx.stroke();
-}
-function drawBishopShape(x, y, r, clr) {
-  ctx.beginPath(); ctx.ellipse(x, y+r*0.6, r*0.7, r*0.25, 0, 0, Math.PI*2);
-  ctx.fillStyle = clr.outline; ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(x-r*0.45, y+r*0.5);
-  ctx.bezierCurveTo(x-r*0.45, y, x-r*0.2, y-r*0.5, x, y-r*0.9);
-  ctx.bezierCurveTo(x+r*0.2, y-r*0.5, x+r*0.45, y, x+r*0.45, y+r*0.5); ctx.closePath();
-  const g = ctx.createLinearGradient(x-r, y-r, x+r, y+r);
-  g.addColorStop(0, '#fff'); g.addColorStop(1, clr.body);
-  ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = clr.outline; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.beginPath(); ctx.arc(x, y-r*0.85, r*0.15, 0, Math.PI*2);
-  ctx.fillStyle = clr.accent; ctx.fill(); ctx.stroke();
-}
-function drawRookShape(x, y, r, clr) {
-  ctx.beginPath(); ctx.ellipse(x, y+r*0.6, r*0.75, r*0.25, 0, 0, Math.PI*2);
-  ctx.fillStyle = clr.outline; ctx.fill();
-  ctx.beginPath(); ctx.rect(x-r*0.4, y-r*0.5, r*0.8, r*1.0);
-  const g = ctx.createLinearGradient(x-r, y, x+r, y);
-  g.addColorStop(0, '#fff'); g.addColorStop(1, clr.body);
-  ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = clr.outline; ctx.lineWidth = 1.5; ctx.stroke();
-  for (let i = -1; i <= 1; i++) {
-    ctx.beginPath(); ctx.rect(x+i*r*0.28-r*0.14, y-r*0.85, r*0.25, r*0.38);
-    ctx.fillStyle = clr.body; ctx.fill(); ctx.strokeStyle = clr.outline; ctx.lineWidth = 1.5; ctx.stroke();
-  }
-}
-function drawQueenShape(x, y, r, clr) {
-  ctx.beginPath(); ctx.ellipse(x, y+r*0.6, r*0.78, r*0.28, 0, 0, Math.PI*2);
-  ctx.fillStyle = clr.outline; ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(x-r*0.5, y+r*0.5);
-  ctx.bezierCurveTo(x-r*0.5, y-r*0.1, x-r*0.25, y-r*0.4, x, y-r*0.6);
-  ctx.bezierCurveTo(x+r*0.25, y-r*0.4, x+r*0.5, y-r*0.1, x+r*0.5, y+r*0.5); ctx.closePath();
-  const g = ctx.createLinearGradient(x-r, y-r, x+r, y+r);
-  g.addColorStop(0, '#fff'); g.addColorStop(1, clr.body);
-  ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = clr.outline; ctx.lineWidth = 1.5; ctx.stroke();
-  for (const [ox, oy] of [[-r*0.4,-r*0.55],[0,-r*0.75],[r*0.4,-r*0.55]]) {
-    ctx.beginPath(); ctx.arc(x+ox, y+oy, r*0.13, 0, Math.PI*2);
-    ctx.fillStyle = '#ffd700'; ctx.fill(); ctx.stroke();
-  }
-}
-function drawKingShape(x, y, r, clr) {
-  ctx.beginPath(); ctx.ellipse(x, y+r*0.6, r*0.78, r*0.28, 0, 0, Math.PI*2);
-  ctx.fillStyle = clr.outline; ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(x-r*0.48, y+r*0.5);
-  ctx.bezierCurveTo(x-r*0.48, y-r*0.1, x-r*0.22, y-r*0.4, x, y-r*0.55);
-  ctx.bezierCurveTo(x+r*0.22, y-r*0.4, x+r*0.48, y-r*0.1, x+r*0.48, y+r*0.5); ctx.closePath();
-  const g = ctx.createLinearGradient(x-r, y-r, x+r, y+r);
-  g.addColorStop(0, '#fff'); g.addColorStop(1, clr.body);
-  ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = clr.outline; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(x, y-r*0.5);    ctx.lineTo(x, y-r*0.9);          ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x-r*0.22, y-r*0.72); ctx.lineTo(x+r*0.22, y-r*0.72); ctx.stroke();
 }

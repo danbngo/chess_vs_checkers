@@ -25,8 +25,6 @@ const CLR = {
   attackHL:    'rgba(50,120,220,0.55)',
   illegalHL:   'rgba(220,50,50,0.45)',
   selected:    'rgba(50,150,255,0.5)',
-  chess:       { body: '#e8e8e8', outline: '#222', accent: '#aaa' },
-  checker:     { body: '#c0392b', outline: '#7b0000', accent: '#e74c3c' },
 };
 
 const TINT_CHESS   = 'rgba(255,255,255,0.55)';
