@@ -14,6 +14,7 @@ let state = {
   enPassantCheckers: new Set(),
   capturedByChess: [],
   capturedByCheckers: [],
+  revivedPieces: [],  // iron pieces waiting to return next wave
 };
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -94,7 +95,11 @@ function startWave(wave, chessPieces) {
   });
   moveAnnotation = null;
 
-  state.chessPieces = assignPlacements(chessPieces.filter(p => !p.dying))
+  const revived = state.revivedPieces.splice(0);   // iron pieces from last wave
+  // Promoted pawns revert to pawns at wave start
+  const toPlace = [...chessPieces.filter(p => !p.dying), ...revived]
+    .map(p => p.promotedFrom ? { ...p, type: p.promotedFrom, promotedFrom: null } : p);
+  state.chessPieces = assignPlacements(toPlace)
     .map(({ piece, row, col }) => ({
       ...piece, row, col, moved: false, dying: false, id: piece.id ?? newId(),
     }));

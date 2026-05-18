@@ -20,14 +20,14 @@ canvas.addEventListener('click', e => {
 
 // ─── Chess move execution ─────────────────────────────────────────────────────
 function executeChessMove(piece, toRow, toCol) {
-  const target             = state.board[toRow][toCol];
-  const fromRow            = piece.row, fromCol = piece.col;
+  const target              = state.board[toRow][toCol];
+  const fromRow             = piece.row, fromCol = piece.col;
   const wasThreatenedBefore = isThreatenedByChecker(fromRow, fromCol, state.board);
 
   let epCapture = null;
-  if (piece.type==='pawn' && !target && toCol!==piece.col && piece.row===3) {
+  if (piece.type === 'pawn' && !target && toCol !== piece.col && piece.row === 3) {
     const adj = state.board[piece.row][toCol];
-    if (adj?.team==='checker' && state.enPassantCheckers.has(adj.id)) epCapture = adj;
+    if (adj?.team === 'checker' && state.enPassantCheckers.has(adj.id)) epCapture = adj;
   }
 
   state.moveCount++;
@@ -40,30 +40,44 @@ function executeChessMove(piece, toRow, toCol) {
   startAnim(piece, toRow, toCol, 280, () => {
     piece.row = toRow; piece.col = toCol; piece.moved = true;
 
-    // Track original type before possible promotion, but store it so next wave respawns correctly.
-    const origType = piece.type;
-    if (piece.type === 'pawn' && piece.row === 0) piece.type = 'queen';
-    const wasPromotion = origType==='pawn' && piece.type==='queen';
+    const finishMove = (wasPromotion) => {
+      if (target) {
+        state.checkers = state.checkers.filter(c => c.id !== target.id);
+        state.capturedByChess.push({ isKing: target.isKing });
+      }
+      if (epCapture) {
+        state.checkers = state.checkers.filter(c => c.id !== epCapture.id);
+        state.capturedByChess.push({ isKing: epCapture.isKing });
+      }
+      // Mercenary: 1/3 chance to desert after making a capture
+      if (piece.trait === 'mercenary' && (target || epCapture)) {
+        if (Math.random() < 1/3) {
+          state.chessPieces = state.chessPieces.filter(p => p.id !== piece.id);
+        }
+      }
+      syncBoard(); updateUI(); renderStrips();
 
-    if (target) {
-      state.checkers = state.checkers.filter(c => c.id !== target.id);
-      state.capturedByChess.push({ isKing: target.isKing });
-    }
-    if (epCapture) {
-      state.checkers = state.checkers.filter(c => c.id !== epCapture.id);
-      state.capturedByChess.push({ isKing: epCapture.isKing });
-    }
-    syncBoard(); updateUI(); renderStrips();
+      const ann = evaluateMove(piece, fromRow, fromCol, wasThreatenedBefore,
+        target ?? epCapture, wasPromotion);
+      showMoveAnnotation(ann, toCol, toRow);
 
-    const ann = evaluateMove(piece, fromRow, fromCol, wasThreatenedBefore,
-      target ?? epCapture, wasPromotion);
-    showMoveAnnotation(ann, toCol, toRow);
+      if (state.checkers.filter(c => !c.dying).length === 0) {
+        waveWon();
+      } else {
+        state.phase = 'checker_move';
+        setTimeout(runCheckerTurn, 350);
+      }
+    };
 
-    if (state.checkers.filter(c => !c.dying).length === 0) {
-      waveWon();
+    // Pawn reaching back rank: show promotion choice (queen or knight)
+    if (piece.type === 'pawn' && piece.row === 0) {
+      showPromotion(piece, (newType) => {
+        piece.type         = newType;
+        piece.promotedFrom = 'pawn'; // remembered so it reverts at wave end
+        finishMove(true);
+      });
     } else {
-      state.phase = 'checker_move';
-      setTimeout(runCheckerTurn, 350);
+      finishMove(false);
     }
   });
 }

@@ -1,0 +1,39 @@
+basic rules:
+
+WAVES:
+- game is played in waves
+- take all the enemy pieces to win a wave
+- be careful! pieces you lose are not returned at the end of the wave (unless they have the Iron trait)
+- if you win the last wave, you win the game!
+
+MONEY:
+- the faster you win, the more money you earn
+- you always earn at least $1 after winning a round
+- money is used in shops between waves to buy more pieces
+- some pieces have special traits - look out for these!
+
+PAWN PROMOTION:
+- when a pawn reaches the back rank (row 8) it can promote to a queen or knight
+- promoted pieces revert back to pawns at the end of each wave
+
+KINGS & CHECK:
+- if you have exactly 1 king, you can be checkmated (instantly lose) and cannot move into check
+- if you have 2 or more kings, check rules are suspended - kings move freely and losing one is not fatal
+- your king flashes red when it is in check
+- you can buy extra kings in the shop (available from wave 3)
+
+EN PASSANT:
+- if an enemy checker moves two squares forward to land beside one of your pawns on the 5th rank, your pawn can capture it diagonally on the following move
+
+CHECKER AI:
+- checkers must capture if a capture is available (mandatory capture rule)
+- after capturing, if further captures are available the checker must keep jumping (multi-jump)
+- checkers that reach your back rank promote to checker kings
+
+CHECKER KINGS:
+- checker kings move backwards as well as forwards
+- from wave 5 onwards, checker kings become Flying Kings: they can slide any number of squares diagonally (like a bishop) and capture from distance
+
+TRAITS:
+- Mercenary (yellow outline): costs half price, but has a 1/3 chance to desert the army after each capture
+- Iron (blue outline): costs double, but when captured is NOT permanently lost - the piece returns at the start of the next wave

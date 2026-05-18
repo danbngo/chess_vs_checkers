@@ -259,6 +259,23 @@ function drawHighlights() {
 }
 
 // ─── Piece drawing ────────────────────────────────────────────────────────────
+const TRAIT_OUTLINE = { mercenary: 'rgba(255,215,0,0.92)', iron: 'rgba(130,210,255,0.92)' };
+
+// Draw the piece tinted with outlineColor at 4 diagonal offsets to create an outline effect.
+function drawOutline(key, x, y, outlineColor) {
+  const img = IMAGES[key];
+  const tinted = getTinted(key, outlineColor);
+  if (!tinted) return;
+  const pad = 6, maxW = CELL-pad*2, maxH = CELL-pad*2;
+  const ratio = img.naturalWidth / img.naturalHeight;
+  let w, h;
+  if (ratio >= 1) { w = maxW; h = maxW/ratio; }
+  else            { h = maxH; w = maxH*ratio; }
+  const off = 2;
+  for (const [dx, dy] of [[-1,-1],[-1,1],[1,-1],[1,1]])
+    ctx.drawImage(tinted, x - w/2 + dx*off, y - h/2 + dy*off, w, h);
+}
+
 function drawPieceImage(key, x, y, tintColor) {
   const img = IMAGES[key];
   const pad = 6, maxW = CELL-pad*2, maxH = CELL-pad*2;
@@ -273,6 +290,8 @@ function drawPieceImage(key, x, y, tintColor) {
 function drawChessPiece(p) {
   const { x, y } = getPieceRenderPos(p);
   if (!imgReady(p.type)) return;
+  const outlineColor = TRAIT_OUTLINE[p.trait];
+  if (outlineColor) drawOutline(p.type, x, y, outlineColor);
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.5)';
   ctx.shadowBlur  = activeAnims.has(p.id) ? 14 : 6;

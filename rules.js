@@ -106,19 +106,29 @@ function runCheckerTurn() {
     return;
   }
 
-  const capturers = alive.filter(ck => getCheckerMoves(ck).some(m => m.capture));
+  const capturers = alive.filter(ck => getCheckerMoves(ck).some(m => m.capture && !m.capture.dying));
   const pool = capturers.length > 0 ? capturers : alive;
   const ck   = pool[Math.floor(Math.random() * pool.length)];
-  animateSingleChecker(ck);
+  animateSingleChecker(ck, capturers.length > 0);
 }
 
-function animateSingleChecker(ck) {
+function applyCheckerCapture(capture) {
+  if (capture.trait === 'iron') {
+    state.revivedPieces.push(capture); // comes back next wave, not lost permanently
+  } else {
+    state.capturedByCheckers.push(capture.type);
+  }
+  state.chessPieces = state.chessPieces.filter(p => p.id !== capture.id);
+}
+
+function animateSingleChecker(ck, mustCapture = false) {
   syncBoard();
   const moves    = getCheckerMoves(ck);
   const captures = moves.filter(m => m.capture && !m.capture.dying);
+  // If mustCapture is true and no captures found, don't fall back to a regular move
   const chosen   = captures.length
     ? captures[Math.floor(Math.random() * captures.length)]
-    : (moves.length ? moves[Math.floor(Math.random() * moves.length)] : null);
+    : (!mustCapture && moves.length ? moves[Math.floor(Math.random() * moves.length)] : null);
 
   if (!chosen) { checkerTurnDone(); return; }
 
@@ -127,10 +137,7 @@ function animateSingleChecker(ck) {
   state.board[ck.row][ck.col] = null;
 
   startAnim(ck, chosen.row, chosen.col, 280, () => {
-    if (capture) {
-      state.chessPieces = state.chessPieces.filter(p => p.id !== capture.id);
-      state.capturedByCheckers.push(capture.type);
-    }
+    if (capture) applyCheckerCapture(capture);
     ck.row = chosen.row; ck.col = chosen.col;
     if (!ck.isKing && ck.row === ROWS-1) ck.isKing = true;
     if (ck.row === 3) state.enPassantCheckers.add(ck.id);
@@ -155,8 +162,7 @@ function animateMultiJump(ck, onDone) {
   state.board[ck.row][ck.col] = null;
 
   startAnim(ck, chosen.row, chosen.col, 220, () => {
-    state.chessPieces = state.chessPieces.filter(p => p.id !== capture.id);
-    state.capturedByCheckers.push(capture.type);
+    applyCheckerCapture(capture);
     ck.row = chosen.row; ck.col = chosen.col;
     if (!ck.isKing && ck.row === ROWS-1) ck.isKing = true;
     if (ck.row === 3) state.enPassantCheckers.add(ck.id);

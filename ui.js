@@ -28,6 +28,13 @@ function calcEarnings(moveCount, checkerCount) {
   return Math.max(1, Math.round(max - t * (max-1)));
 }
 
+function pickTrait() {
+  const r = Math.random();
+  if (r < 0.20) return 'mercenary';
+  if (r < 0.35) return 'iron';
+  return null;
+}
+
 function waveShopAdditions(wave) {
   const livePieces = state.chessPieces.filter(p => !p.dying);
   let backSpace  = 8 - livePieces.filter(p => p.type !== 'pawn').length
@@ -61,7 +68,14 @@ function waveShopAdditions(wave) {
     }
   }
 
-  return picks.map(type => ({ type, cost: PIECE_COSTS[type] }));
+  return picks.map(type => {
+    const trait = pickTrait();
+    const base  = PIECE_COSTS[type];
+    const cost  = trait === 'mercenary' ? Math.max(1, Math.round(base * 0.5))
+                : trait === 'iron'      ? base * 2
+                : base;
+    return { type, cost, trait };
+  });
 }
 
 function showShop(earned, nextWave) {
@@ -102,6 +116,12 @@ function showShop(earned, nextWave) {
       div.className = 'shop-item';
       const nm  = document.createElement('div'); nm.className  = 'shop-item-name';
       nm.textContent = pos ? `${pos.toUpperCase()} ${PIECE_DEFS[item.type].name}` : PIECE_DEFS[item.type].name;
+      if (item.trait) {
+        const tr = document.createElement('div');
+        tr.className = `shop-item-trait trait-${item.trait}`;
+        tr.textContent = item.trait === 'mercenary' ? 'Mercenary' : 'Iron';
+        div.appendChild(tr);
+      }
       const cs  = document.createElement('div'); cs.className  = 'shop-item-cost';
       cs.textContent = `$${item.cost}`;
       const btn = document.createElement('button'); btn.className = 'shop-buy-btn';
@@ -129,10 +149,36 @@ function showShop(earned, nextWave) {
   document.getElementById('shop-overlay').classList.remove('hidden');
 }
 
+// ─── Pawn promotion UI ────────────────────────────────────────────────────────
+function showPromotion(piece, onChoice) {
+  const opts = document.getElementById('piece-options');
+  opts.innerHTML = '';
+  for (const type of ['queen', 'knight']) {
+    const btn = document.createElement('button');
+    btn.className = 'piece-option-btn';
+    btn.textContent = PIECE_DEFS[type].name;
+    btn.onclick = () => {
+      document.getElementById('piece-select').classList.add('hidden');
+      onChoice(type);
+    };
+    opts.appendChild(btn);
+  }
+  document.getElementById('piece-select').classList.remove('hidden');
+}
+
 // ─── Wave / game events ───────────────────────────────────────────────────────
 function waveWon() {
   state.phase = 'wave_end';
   updateUI();
+  if (state.wave >= MAX_WAVE) {
+    showMessage('Victory!',
+      `You cleared all ${MAX_WAVE} waves! Final score: $${state.dollars}.`,
+      () => {
+        document.getElementById('title-screen').classList.remove('hidden');
+        renderTitleSaveSlots();
+      });
+    return;
+  }
   showShop(calcEarnings(state.moveCount, state.waveCheckerCount), state.wave + 1);
 }
 
