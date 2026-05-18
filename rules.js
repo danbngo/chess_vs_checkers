@@ -1,6 +1,5 @@
 // ─── Check detection ──────────────────────────────────────────────────────────
 function isThreatenedByChecker(row, col, board) {
-  const flyingActive = state.wave >= FLYING_KING_WAVE;
   for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
     // Landing square — where the checker would land after jumping over (row,col)
     const lr = row+dr, lc = col+dc;
@@ -11,12 +10,11 @@ function isThreatenedByChecker(row, col, board) {
       const p = board[r]?.[c];
       if (p) {
         if (p.team === 'checker') {
-          if ( p.isKing && (dist===1 || flyingActive)) return true;
-          if (!p.isKing && dist===1 && dr>0)           return true; // forward only
+          if ( p.isKing && (dist===1 || p.isFlyingKing)) return true;
+          if (!p.isKing && dist===1 && dr>0)             return true; // forward only
         }
         break;
       }
-      if (!flyingActive) break;
       r -= dr; c -= dc; dist++;
     }
   }
@@ -53,7 +51,7 @@ function getLegalMoves(piece) {
 // ─── Checker moves ────────────────────────────────────────────────────────────
 function getCheckerMoves(ck) {
   const moves  = [];
-  const flying = ck.isKing && state.wave >= FLYING_KING_WAVE;
+  const flying = ck.isKing && ck.isFlyingKing;
   const dirs   = ck.isKing ? [[-1,-1],[-1,1],[1,-1],[1,1]] : [[1,-1],[1,1]];
 
   for (const [dr, dc] of dirs) {
@@ -139,7 +137,11 @@ function animateSingleChecker(ck, mustCapture = false) {
   startAnim(ck, chosen.row, chosen.col, 280, () => {
     if (capture) applyCheckerCapture(capture);
     ck.row = chosen.row; ck.col = chosen.col;
-    if (!ck.isKing && ck.row === ROWS-1) ck.isKing = true;
+    if (!ck.isKing && ck.row === ROWS-1) {
+      ck.isKing = true;
+      // Becomes flying king if any flying king is alive in the army
+      ck.isFlyingKing = state.wave >= FLYING_KING_WAVE && state.checkers.some(c => c.isFlyingKing);
+    }
     if (ck.row === 3) state.enPassantCheckers.add(ck.id);
     syncBoard(); updateUI(); renderStrips();
 
@@ -164,7 +166,11 @@ function animateMultiJump(ck, onDone) {
   startAnim(ck, chosen.row, chosen.col, 220, () => {
     applyCheckerCapture(capture);
     ck.row = chosen.row; ck.col = chosen.col;
-    if (!ck.isKing && ck.row === ROWS-1) ck.isKing = true;
+    if (!ck.isKing && ck.row === ROWS-1) {
+      ck.isKing = true;
+      // Becomes flying king if any flying king is alive in the army
+      ck.isFlyingKing = state.wave >= FLYING_KING_WAVE && state.checkers.some(c => c.isFlyingKing);
+    }
     if (ck.row === 3) state.enPassantCheckers.add(ck.id);
     syncBoard(); updateUI(); renderStrips();
 

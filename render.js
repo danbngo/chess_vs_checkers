@@ -10,6 +10,7 @@ for (const [key, src] of [
   ['king',         'images/king.png'],
   ['checker',      'images/checker.png'],
   ['checker_king', 'images/checker_king.png'],
+  ['amazon',       'images/amazon.png'], // replace with dedicated art when available
 ]) {
   const img = new Image();
   img.onload = () => {
@@ -259,7 +260,7 @@ function drawHighlights() {
 }
 
 // ─── Piece drawing ────────────────────────────────────────────────────────────
-const TRAIT_OUTLINE = { mercenary: 'rgba(255,215,0,0.92)', iron: 'rgba(130,210,255,0.92)' };
+const TRAIT_OUTLINE = { mercenary: 'rgba(255,215,0,0.92)', iron: 'rgba(130,210,255,0.92)', raider: 'rgba(255,100,0,0.92)' };
 
 // Draw the piece tinted with outlineColor at 4 diagonal offsets to create an outline effect.
 function drawOutline(key, x, y, outlineColor) {
@@ -289,13 +290,15 @@ function drawPieceImage(key, x, y, tintColor) {
 
 function drawChessPiece(p) {
   const { x, y } = getPieceRenderPos(p);
-  if (!imgReady(p.type)) return;
+  // Amazon falls back to queen image until images/amazon.png is provided
+  const imgKey = (p.type === 'amazon' && !imgReady('amazon')) ? 'queen' : p.type;
+  if (!imgReady(imgKey)) return;
   const outlineColor = TRAIT_OUTLINE[p.trait];
-  if (outlineColor) drawOutline(p.type, x, y, outlineColor);
+  if (outlineColor) drawOutline(imgKey, x, y, outlineColor);
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.5)';
   ctx.shadowBlur  = activeAnims.has(p.id) ? 14 : 6;
-  drawPieceImage(p.type, x, y, TINT_CHESS);
+  drawPieceImage(imgKey, x, y, p.type === 'amazon' ? TINT_AMAZON : TINT_CHESS);
   ctx.restore();
 }
 

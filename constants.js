@@ -14,7 +14,7 @@ const lctx = leftStrip.getContext('2d');
 const rctx = rightStrip.getContext('2d');
 
 // ─── Tuning ───────────────────────────────────────────────────────────────────
-const PIECE_COSTS    = { pawn: 8, knight: 25, bishop: 25, rook: 40, queen: 70, king: 60 };
+const PIECE_COSTS    = { pawn: 8, knight: 25, bishop: 25, rook: 40, queen: 70, king: 60, amazon: 110 };
 const FLYING_KING_WAVE = 5;
 const MAX_WAVE = 10;
 
@@ -30,3 +30,4 @@ const CLR = {
 
 const TINT_CHESS   = 'rgba(255,255,255,0.55)';
 const TINT_CHECKER = 'rgba(0,0,0,0.5)';
+const TINT_AMAZON  = 'rgba(200,120,255,0.6)';  // purple tint; replace images/amazon.png when art is ready

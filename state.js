@@ -105,18 +105,21 @@ function startWave(wave, chessPieces) {
     }));
 
   const ckPos = checkerStartPositions(cfg.checkerCount);
-  state.checkers = ckPos.map(([r, c], i) => ({
-    type: 'checker', team: 'checker', row: r, col: c,
-    isKing: !!(cfg.kingsAt && i < cfg.kingsAt),
-    dying: false, id: newId(),
-  }));
+  const hasStartKings = !!(cfg.kingsAt && cfg.kingsAt > 0);
+  state.checkers = ckPos.map(([r, c], i) => {
+    const isKing = hasStartKings && i < cfg.kingsAt;
+    // First starting king is always flying; the rest are 50/50 — ensures a mix
+    const isFlyingKing = isKing && wave >= FLYING_KING_WAVE && (i === 0 || Math.random() < 0.5);
+    return { type: 'checker', team: 'checker', row: r, col: c, isKing, isFlyingKing, dying: false, id: newId() };
+  });
 
   state.waveCheckerCount = state.checkers.length;
   syncBoard(); updateUI(); renderStrips();
 
-  if (wave === FLYING_KING_WAVE)
+  if (wave === FLYING_KING_WAVE) {
     showMessage('Flying Kings!',
-      'Checker kings can now slide diagonally any distance and threaten from afar.', () => {});
+      'Some checker kings can now slide diagonally any distance. Promoted kings inherit this ability if any flying king is still alive.', () => {});
+  }
 }
 
 function initialChessPieces() {

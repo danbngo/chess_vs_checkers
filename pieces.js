@@ -75,6 +75,22 @@ const PIECE_DEFS = {
       return moves;
     }
   },
+  amazon: {
+    name: 'Amazon', symbol: 'A', value: 12,
+    getMoves(r, c, board) {
+      // Queen slides + knight leaps
+      const moves = slidingMoves(r, c, board, [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]]);
+      const seen  = new Set(moves.map(([mr, mc]) => mr * COLS + mc));
+      for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+        const nr = r+dr, nc = c+dc;
+        if (nr>=0 && nr<ROWS && nc>=0 && nc<COLS && board[nr][nc]?.team!=='chess') {
+          const key = nr * COLS + nc;
+          if (!seen.has(key)) { seen.add(key); moves.push([nr, nc]); }
+        }
+      }
+      return moves;
+    }
+  },
 };
 
 // ─── Chess starting slots (real chess positions) ───────────────────────────────

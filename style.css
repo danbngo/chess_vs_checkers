@@ -367,6 +367,7 @@ body {
 .shop-item-trait { font-size: 0.72em; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
 .trait-mercenary { color: #ffd700; }
 .trait-iron      { color: #82d2ff; }
+.trait-raider    { color: #ff7a30; }
 .shop-item-cost { font-size: 0.85em; color: #ffd700; margin-bottom: 8px; }
 
 .shop-buy-btn {

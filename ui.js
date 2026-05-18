@@ -28,11 +28,14 @@ function calcEarnings(moveCount, checkerCount) {
   return Math.max(1, Math.round(max - t * (max-1)));
 }
 
-function pickTrait() {
+function pickTrait(wave) {
+  // 0% chance at first shop (wave 1), 100% at last shop (wave MAX_WAVE - 1), linear
+  const chance = (wave - 1) / Math.max(1, MAX_WAVE - 2);
+  if (Math.random() > chance) return null;
   const r = Math.random();
-  if (r < 0.20) return 'mercenary';
-  if (r < 0.35) return 'iron';
-  return null;
+  if (r < 1/3) return 'mercenary';
+  if (r < 2/3) return 'iron';
+  return 'raider';
 }
 
 function waveShopAdditions(wave) {
@@ -47,6 +50,13 @@ function waveShopAdditions(wave) {
   const backPool = ['knight', 'knight', 'bishop', 'bishop'];
   if (wave >= 3) backPool.push('rook', 'king');
   if (wave >= 5) backPool.push('queen');
+  // Variant pieces: linear ramp from 0% at wave floor(MAX_WAVE/2) to full weight at final shop
+  const variantStart = Math.floor(MAX_WAVE / 2);
+  if (wave > variantStart) {
+    const scale = (wave - variantStart) / Math.max(1, MAX_WAVE - 1 - variantStart);
+    const slots = Math.ceil(scale * 2); // 1 entry at low end, 2 at final shop
+    for (let s = 0; s < slots; s++) backPool.push('amazon');
+  }
 
   const count = Math.min(2 + Math.floor((wave - 1) / 2), 5);
   const picks = [];
@@ -69,10 +79,12 @@ function waveShopAdditions(wave) {
   }
 
   return picks.map(type => {
-    const trait = pickTrait();
+    let trait = pickTrait(wave);
+    if (type === 'king' && trait === 'mercenary') trait = null; // kings can't be mercenaries
     const base  = PIECE_COSTS[type];
     const cost  = trait === 'mercenary' ? Math.max(1, Math.round(base * 0.5))
                 : trait === 'iron'      ? base * 2
+                : trait === 'raider'    ? Math.round(base * 1.5)
                 : base;
     return { type, cost, trait };
   });
@@ -119,7 +131,9 @@ function showShop(earned, nextWave) {
       if (item.trait) {
         const tr = document.createElement('div');
         tr.className = `shop-item-trait trait-${item.trait}`;
-        tr.textContent = item.trait === 'mercenary' ? 'Mercenary' : 'Iron';
+        tr.textContent = item.trait === 'mercenary' ? 'Mercenary'
+                       : item.trait === 'iron'       ? 'Iron'
+                       : 'Raider';
         div.appendChild(tr);
       }
       const cs  = document.createElement('div'); cs.className  = 'shop-item-cost';
@@ -132,7 +146,7 @@ function showShop(earned, nextWave) {
         state.dollars -= item.cost;
         state.shop.splice(i, 1);
         state.chessPieces.push({ type: item.type, team: 'chess', id: newId(),
-          dying: false, moved: false, row: 0, col: 0 });
+          dying: false, moved: false, row: 0, col: 0, trait: item.trait ?? null });
         refresh();
       };
       div.append(nm, cs, btn);
@@ -203,10 +217,17 @@ function saveGame(slot) {
   saves[slot] = {
     wave: state.wave, dollars: state.dollars, moveCount: state.moveCount,
     waveCheckerCount: state.waveCheckerCount, shop: state.shop, nextId: state.nextId,
-    chessPieces: state.chessPieces.map(p =>
-      ({ type: p.type, team: p.team, row: p.row, col: p.col, moved: p.moved, id: p.id })),
-    checkers: state.checkers.map(c =>
-      ({ team: c.team, row: c.row, col: c.col, isKing: c.isKing, id: c.id })),
+    chessPieces: state.chessPieces.map(p => ({
+      type: p.type, team: p.team, row: p.row, col: p.col,
+      moved: p.moved, id: p.id, trait: p.trait ?? null, promotedFrom: p.promotedFrom ?? null,
+    })),
+    checkers: state.checkers.map(c => ({
+      team: c.team, row: c.row, col: c.col, isKing: c.isKing, isFlyingKing: c.isFlyingKing ?? false, id: c.id,
+    })),
+    revivedPieces: state.revivedPieces.map(p => ({
+      type: p.type, team: p.team, row: p.row, col: p.col,
+      moved: p.moved, id: p.id, trait: p.trait ?? null, promotedFrom: p.promotedFrom ?? null,
+    })),
     capturedByChess:    state.capturedByChess,
     capturedByCheckers: state.capturedByCheckers,
     date: new Date().toLocaleString(),
@@ -218,6 +239,7 @@ function saveGame(slot) {
 function loadGame(slot) {
   const save = getSaves()[slot];
   if (!save) return;
+  activeAnims.clear(); // cancel any in-flight animations from the previous game state
   state.wave             = save.wave;
   state.dollars          = save.dollars          || 0;
   state.moveCount        = save.moveCount        || 0;
@@ -226,6 +248,7 @@ function loadGame(slot) {
   state.nextId           = save.nextId;
   state.chessPieces      = save.chessPieces.map(p => ({ ...p, dying: false }));
   state.checkers         = save.checkers.map(c  => ({ ...c, type: 'checker', dying: false }));
+  state.revivedPieces    = (save.revivedPieces || []).map(p => ({ ...p, dying: false }));
   state.capturedByChess    = save.capturedByChess    || [];
   state.capturedByCheckers = save.capturedByCheckers || [];
   state.selected = null; state.phase = 'player';

@@ -32,8 +32,14 @@ CHECKER AI:
 
 CHECKER KINGS:
 - checker kings move backwards as well as forwards
-- from wave 5 onwards, checker kings become Flying Kings: they can slide any number of squares diagonally (like a bishop) and capture from distance
+- from wave 5 onwards, some checker kings are Flying Kings: they can slide any number of squares diagonally (like a bishop) and capture from distance
+- not all kings in the enemy army will be flying kings — expect a mix
+- when a checker promotes mid-wave, it becomes a flying king if any flying king is still alive in the enemy army; otherwise it becomes a normal king
 
-TRAITS:
-- Mercenary (yellow outline): costs half price, but has a 1/3 chance to desert the army after each capture
+TRAITS (appear more often in later waves, never in the first shop — scales linearly to 100% by the last shop):
+- Mercenary (yellow outline): costs half price, but has a 1/3 chance to desert the army after each capture. Kings cannot be mercenaries.
 - Iron (blue outline): costs double, but when captured is NOT permanently lost - the piece returns at the start of the next wave
+- Raider (orange outline): costs 1.5x, earns $1 every time it captures an enemy
+
+VARIANT PIECES (appear from wave halfway onwards, reaching normal shop frequency by the final shop):
+- Amazon: moves like a queen AND a knight combined. Costs $110. Visually shown with a purple tint.

@@ -49,6 +49,10 @@ function executeChessMove(piece, toRow, toCol) {
         state.checkers = state.checkers.filter(c => c.id !== epCapture.id);
         state.capturedByChess.push({ isKing: epCapture.isKing });
       }
+      // Raider: earns $1 per capture
+      if (piece.trait === 'raider' && (target || epCapture)) {
+        state.dollars++;
+      }
       // Mercenary: 1/3 chance to desert after making a capture
       if (piece.trait === 'mercenary' && (target || epCapture)) {
         if (Math.random() < 1/3) {
