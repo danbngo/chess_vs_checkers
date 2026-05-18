@@ -38,6 +38,8 @@ function isKingInCheckAfterMove(piece, toRow, toCol, epCol) {
 
 function getLegalMoves(piece) {
   const raw = PIECE_DEFS[piece.type].getMoves(piece.row, piece.col, state.board);
+  // With 2+ kings no piece is restricted from moving into "check"
+  if (state.chessPieces.filter(p => p.type === 'king' && !p.dying).length >= 2) return raw;
   return raw.filter(([mr, mc]) => {
     let epCol;
     if (piece.type==='pawn' && piece.row===3 && mc!==piece.col && !state.board[mr]?.[mc]) {

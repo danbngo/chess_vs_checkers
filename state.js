@@ -43,6 +43,45 @@ function checkerStartPositions(count) {
   return [...pri, ...ov].slice(0, count);
 }
 
+// ─── Placement ────────────────────────────────────────────────────────────────
+// Non-pawns go to row 7 (canonical chess positions first, then left-to-right overflow).
+// Pawns go to row 6 (canonical center-out positions first, then left-to-right overflow).
+function assignPlacements(pieces) {
+  const takenBack  = new Set();
+  const takenFront = new Set();
+  const result     = [];
+  const typeCounts = {};
+
+  for (const p of pieces.filter(q => q.type !== 'pawn')) {
+    const idx       = typeCounts[p.type] ?? 0;
+    typeCounts[p.type] = idx + 1;
+    const canonical = (CHESS_SLOTS[p.type] || [])[idx];
+    if (canonical && !takenBack.has(canonical[1])) {
+      takenBack.add(canonical[1]);
+      result.push({ piece: p, row: 7, col: canonical[1] });
+    } else {
+      let col = -1;
+      for (let c = 0; c < 8; c++) { if (!takenBack.has(c)) { col = c; break; } }
+      if (col >= 0) { takenBack.add(col); result.push({ piece: p, row: 7, col }); }
+    }
+  }
+
+  let pawnIdx = 0;
+  for (const p of pieces.filter(q => q.type === 'pawn')) {
+    const canonical = (CHESS_SLOTS.pawn || [])[pawnIdx++];
+    if (canonical && !takenFront.has(canonical[1])) {
+      takenFront.add(canonical[1]);
+      result.push({ piece: p, row: 6, col: canonical[1] });
+    } else {
+      let col = -1;
+      for (let c = 0; c < 8; c++) { if (!takenFront.has(c)) { col = c; break; } }
+      if (col >= 0) { takenFront.add(col); result.push({ piece: p, row: 6, col }); }
+    }
+  }
+
+  return result;
+}
+
 // ─── Wave setup ───────────────────────────────────────────────────────────────
 function startWave(wave, chessPieces) {
   const cfg = getWaveConfig(wave);
@@ -55,13 +94,10 @@ function startWave(wave, chessPieces) {
   });
   moveAnnotation = null;
 
-  const typeCounts = {};
-  // Filter dying pieces defensively — they must never carry into the next wave.
-  state.chessPieces = chessPieces.filter(p => !p.dying).map(p => {
-    if (!typeCounts[p.type]) typeCounts[p.type] = 0;
-    const [row, col] = getChessSlot(p.type, typeCounts[p.type]++);
-    return { ...p, row, col, moved: false, dying: false, id: p.id ?? newId() };
-  });
+  state.chessPieces = assignPlacements(chessPieces.filter(p => !p.dying))
+    .map(({ piece, row, col }) => ({
+      ...piece, row, col, moved: false, dying: false, id: piece.id ?? newId(),
+    }));
 
   const ckPos = checkerStartPositions(cfg.checkerCount);
   state.checkers = ckPos.map(([r, c], i) => ({

@@ -29,14 +29,38 @@ function calcEarnings(moveCount, checkerCount) {
 }
 
 function waveShopAdditions(wave) {
-  const pool = ['pawn'];
-  if (wave >= 1) pool.push('knight');
-  if (wave >= 2) pool.push('bishop');
-  if (wave >= 3) pool.push('rook');
-  if (wave >= 5) pool.push('queen');
-  const count = Math.min(2 + Math.floor((wave-1) / 2), 5);
-  const picks = ['pawn'];
-  for (let i = 1; i < count; i++) picks.push(pool[Math.floor(Math.random() * pool.length)]);
+  const livePieces = state.chessPieces.filter(p => !p.dying);
+  let backSpace  = 8 - livePieces.filter(p => p.type !== 'pawn').length
+                     - state.shop.filter(s => s.type !== 'pawn').length;
+  let frontSpace = 8 - livePieces.filter(p => p.type === 'pawn').length
+                     - state.shop.filter(s => s.type === 'pawn').length;
+
+  if (backSpace <= 0 && frontSpace <= 0) return [];
+
+  const backPool = ['knight', 'knight', 'bishop', 'bishop'];
+  if (wave >= 3) backPool.push('rook', 'king');
+  if (wave >= 5) backPool.push('queen');
+
+  const count = Math.min(2 + Math.floor((wave - 1) / 2), 5);
+  const picks = [];
+
+  if (frontSpace > 0) { picks.push('pawn'); frontSpace--; }
+
+  let tries = 0;
+  while (picks.length < count && tries < 30) {
+    tries++;
+    const canBack  = backSpace > 0;
+    const canFront = frontSpace > 0;
+    if (!canBack && !canFront) break;
+    if (canBack && (!canFront || Math.random() < 0.7)) {
+      picks.push(backPool[Math.floor(Math.random() * backPool.length)]);
+      backSpace--;
+    } else {
+      picks.push('pawn');
+      frontSpace--;
+    }
+  }
+
   return picks.map(type => ({ type, cost: PIECE_COSTS[type] }));
 }
 
@@ -54,17 +78,25 @@ function showShop(earned, nextWave) {
     const container = document.getElementById('shop-items');
     container.innerHTML = '';
 
-    const slotIdx = {};
+    const liveNonPawns = state.chessPieces.filter(p => !p.dying && p.type !== 'pawn').length;
+    const livePawns    = state.chessPieces.filter(p => !p.dying && p.type === 'pawn').length;
+    const backFull  = liveNonPawns >= 8;
+    const frontFull = livePawns >= 8;
+
+    // Track counts for canonical position label (best-guess slot for each type)
+    const labelCounts = {};
     state.chessPieces.filter(p => !p.dying).forEach(p => {
-      slotIdx[p.type] = (slotIdx[p.type] || 0) + 1;
+      labelCounts[p.type] = (labelCounts[p.type] || 0) + 1;
     });
 
     state.shop.forEach((item, i) => {
-      const idx   = slotIdx[item.type] || 0;
-      const slots = CHESS_SLOTS[item.type] || [];
-      const full  = idx >= slots.length;
-      const pos   = full ? null : toChessNotation(slots[idx][0], slots[idx][1]);
-      slotIdx[item.type] = idx + 1;
+      const isPawn = item.type === 'pawn';
+      const full   = isPawn ? frontFull : backFull;
+
+      const idx       = labelCounts[item.type] || 0;
+      labelCounts[item.type] = idx + 1;
+      const canonical = (CHESS_SLOTS[item.type] || [])[idx];
+      const pos       = canonical ? toChessNotation(canonical[0], canonical[1]) : null;
 
       const div = document.createElement('div');
       div.className = 'shop-item';
@@ -134,8 +166,7 @@ function saveGame(slot) {
     date: new Date().toLocaleString(),
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(saves)); }
-  catch { alert('Could not save — localStorage unavailable.'); return; }
-  renderSavePanel();
+  catch { alert('Could not save — localStorage unavailable.'); }
 }
 
 function loadGame(slot) {
@@ -155,12 +186,12 @@ function loadGame(slot) {
   state.enPassantCheckers = new Set();
   moveAnnotation = null;
   syncBoard(); updateUI(); renderStrips();
-  document.getElementById('save-panel').classList.add('hidden');
+  document.getElementById('menu-overlay').classList.add('hidden');
 }
 
-function renderSavePanel() {
+function renderMenuSlots() {
   const saves     = getSaves();
-  const container = document.getElementById('save-slots');
+  const container = document.getElementById('menu-slots');
   if (!container) return;
   container.innerHTML = '';
   saves.forEach((save, i) => {
@@ -175,13 +206,13 @@ function renderSavePanel() {
       info.textContent = 'Empty slot';
     }
 
-    const btns    = document.createElement('div');
+    const btns = document.createElement('div');
     btns.className = 'slot-btns';
 
     const saveBtn = document.createElement('button');
     saveBtn.className = 'slot-btn save-btn';
     saveBtn.textContent = 'Save';
-    saveBtn.onclick = () => saveGame(i);
+    saveBtn.onclick = () => { saveGame(i); renderMenuSlots(); };
 
     const loadBtn = document.createElement('button');
     loadBtn.className = 'slot-btn load-btn';
@@ -195,8 +226,21 @@ function renderSavePanel() {
   });
 }
 
-document.getElementById('save-load-toggle').onclick = () => {
-  const panel = document.getElementById('save-panel');
-  renderSavePanel();
-  panel.classList.toggle('hidden');
+function openMenu() {
+  renderMenuSlots();
+  document.getElementById('menu-overlay').classList.remove('hidden');
+}
+
+document.getElementById('menu-btn').onclick = openMenu;
+
+document.getElementById('menu-close').onclick = () => {
+  document.getElementById('menu-overlay').classList.add('hidden');
+};
+
+document.getElementById('menu-exit-title').onclick = () => {
+  document.getElementById('menu-overlay').classList.add('hidden');
+  document.getElementById('shop-overlay').classList.add('hidden');
+  document.getElementById('message-overlay').classList.add('hidden');
+  document.getElementById('title-screen').classList.remove('hidden');
+  renderTitleSaveSlots();
 };

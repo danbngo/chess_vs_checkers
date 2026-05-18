@@ -212,8 +212,10 @@ function drawBoard() {
 
 function drawCheckIndicator() {
   if (state.phase !== 'player') return;
-  const king = state.chessPieces.find(p => p.type==='king' && !p.dying);
-  if (!king || !isThreatenedByChecker(king.row, king.col, state.board)) return;
+  const kings = state.chessPieces.filter(p => p.type === 'king' && !p.dying);
+  if (kings.length !== 1) return; // multi-king: no check rules; 0 kings: already game over
+  const king = kings[0];
+  if (!isThreatenedByChecker(king.row, king.col, state.board)) return;
   const pulse = 0.28 + 0.18 * Math.sin(performance.now() / 180);
   ctx.fillStyle = `rgba(255,0,0,${pulse})`;
   ctx.fillRect(king.col*CELL, king.row*CELL, CELL, CELL);

@@ -14,7 +14,7 @@ const lctx = leftStrip.getContext('2d');
 const rctx = rightStrip.getContext('2d');
 
 // ─── Tuning ───────────────────────────────────────────────────────────────────
-const PIECE_COSTS    = { pawn: 8, knight: 25, bishop: 25, rook: 40, queen: 70 };
+const PIECE_COSTS    = { pawn: 8, knight: 25, bishop: 25, rook: 40, queen: 70, king: 60 };
 const FLYING_KING_WAVE = 5;
 
 // ─── Colours ──────────────────────────────────────────────────────────────────

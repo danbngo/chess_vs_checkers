@@ -88,10 +88,6 @@ const CHESS_SLOTS = {
   pawn:   [[6,3],[6,4],[6,2],[6,5],[6,1],[6,6],[6,0],[6,7]],
 };
 
-function getChessSlot(type, index) {
-  return (CHESS_SLOTS[type] || [])[index] ?? [5, index % COLS];
-}
-
 // ─── Wave config ──────────────────────────────────────────────────────────────
 const WAVE_CONFIG = [
   { checkerCount: 3  },
