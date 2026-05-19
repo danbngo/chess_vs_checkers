@@ -115,6 +115,65 @@ function getCheckerMoves(ck) {
   return moves;
 }
 
+// ─── Checker AI ───────────────────────────────────────────────────────────
+function rateMove(ck, move) {
+  let score = 0;
+
+  if (move.capture) {
+    // Captures are rated highest
+    if (move.capture.type === 'king') {
+      score = 1000; // King capture is the best
+    } else {
+      score = 100;  // Any other capture
+    }
+    // Bonus for additional captures (double captures)
+    if (move.capture2) {
+      if (move.capture2.type === 'king') {
+        score += 500; // Double-capturing king is excellent
+      } else {
+        score += 50;  // Double capture bonus
+      }
+    }
+  } else {
+    // Non-capture move scoring
+    // Create temp board after this move to evaluate the position
+    const tempBoard = state.board.map(row => [...row]);
+    tempBoard[ck.row][ck.col] = null;
+    tempBoard[move.row][move.col] = { ...ck, row: move.row, col: move.col };
+
+    // Check if destination would threaten any chess pieces (could capture next turn)
+    const threatsFromDest = [];
+    for (const [dr, dc] of ck.isKing ? [[-1,-1],[-1,1],[1,-1],[1,1]] : [[1,-1],[1,1]]) {
+      const nr = move.row + dr, nc = move.col + dc;
+      if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) continue;
+      const t = tempBoard[nr][nc];
+      if (!t || t.team !== 'chess') continue;
+      const lr = nr + dr, lc = nc + dc;
+      if (lr >= 0 && lr < ROWS && lc >= 0 && lc < COLS && !tempBoard[lr][lc]) {
+        threatsFromDest.push(t);
+      }
+    }
+
+    // Check if destination is threatened by any chess piece
+    const isThreatened = isThreatenedByChecker(move.row, move.col, tempBoard);
+
+    if (threatsFromDest.length > 0) {
+      // Can threaten a piece from this position
+      if (isThreatened) {
+        score = 5;  // Threatens but also threatened (risky)
+      } else {
+        score = 50; // Threatens and safe (good position)
+      }
+    } else if (isThreatened) {
+      score = 1; // Exposed to attack (bad)
+    } else {
+      score = 10; // Safe but passive
+    }
+  }
+
+  return score;
+}
+
 // ─── Checker AI ───────────────────────────────────────────────────────────────
 // One checker per player turn. Mandatory capture. Multi-jump after captures.
 
@@ -153,10 +212,22 @@ function animateSingleChecker(ck, mustCapture = false) {
   syncBoard();
   const moves    = getCheckerMoves(ck);
   const captures = moves.filter(m => m.capture && !m.capture.dying);
-  // If mustCapture is true and no captures found, don't fall back to a regular move
-  const chosen   = captures.length
-    ? captures[Math.floor(Math.random() * captures.length)]
-    : (!mustCapture && moves.length ? moves[Math.floor(Math.random() * moves.length)] : null);
+
+  // Filter pool based on mustCapture rule
+  let pool = moves;
+  if (mustCapture && captures.length > 0) {
+    pool = captures;
+  } else if (mustCapture) {
+    // Must capture but no captures available - end turn
+    checkerTurnDone();
+    return;
+  }
+
+  // Rate all moves in pool and pick the best-rated one(s)
+  const rated = pool.map(m => ({ move: m, score: rateMove(ck, m) }));
+  const maxScore = Math.max(...rated.map(r => r.score));
+  const bestMoves = rated.filter(r => r.score === maxScore);
+  const chosen = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
 
   if (!chosen) { checkerTurnDone(); return; }
 
@@ -191,7 +262,11 @@ function animateMultiJump(ck, onDone) {
   const captures = getCheckerMoves(ck).filter(m => m.capture && !m.capture.dying);
   if (!captures.length) { onDone(); return; }
 
-  const chosen   = captures[Math.floor(Math.random() * captures.length)];
+  // Rate captures and pick the best-rated one(s)
+  const rated = captures.map(m => ({ move: m, score: rateMove(ck, m) }));
+  const maxScore = Math.max(...rated.map(r => r.score));
+  const bestMoves = rated.filter(r => r.score === maxScore);
+  const chosen = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
   const capture  = chosen.capture;
   const capture2 = chosen.capture2 ?? null;
   capture.dying = true;

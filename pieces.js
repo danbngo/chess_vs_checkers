@@ -217,6 +217,14 @@ const CHESS_SLOTS = {
   pawn:   [[6,3],[6,4],[6,2],[6,5],[6,1],[6,6],[6,0],[6,7]],
 };
 
+// ─── Checker piece info ────────────────────────────────────────────────────────
+const CHECKER_DESCS = {
+  checker: 'A basic checker piece. Moves diagonally forward and captures diagonally forward. Promotes to king upon reaching the opponent\'s back rank.',
+  checker_king: 'A promoted checker that can move diagonally in all directions (forwards and backwards). Gains the ability to capture in any diagonal direction.',
+  checker_flying_king: 'A rare flying king (from wave 5+). Slides multiple squares diagonally like a bishop, allowing long-range attacks and evasion.',
+  checker_triple_king: 'A king that returned to its starting row. Can capture two consecutive enemy pieces in one jump and hop over allied pieces.',
+};
+
 // ─── Wave config ──────────────────────────────────────────────────────────────
 const WAVE_CONFIG = [
   { checkerCount: 3  },

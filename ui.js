@@ -139,6 +139,15 @@ function showShop(earned, nextWave) {
       div.className = 'shop-item';
       const nm  = document.createElement('div'); nm.className  = 'shop-item-name';
       nm.textContent = pos ? `${pos.toUpperCase()} ${PIECE_DEFS[item.type].name}` : PIECE_DEFS[item.type].name;
+      div.appendChild(nm);
+
+      if (PIECE_DEFS[item.type].description) {
+        const desc = document.createElement('div');
+        desc.className = 'shop-item-desc';
+        desc.textContent = PIECE_DEFS[item.type].description;
+        div.appendChild(desc);
+      }
+
       if (item.trait) {
         const tr = document.createElement('div');
         tr.className = `shop-item-trait trait-${item.trait}`;
@@ -160,7 +169,7 @@ function showShop(earned, nextWave) {
           dying: false, moved: false, row: 0, col: 0, trait: item.trait ?? null });
         refresh();
       };
-      div.append(nm, cs, btn);
+      div.append(cs, btn);
       container.appendChild(div);
     });
   };

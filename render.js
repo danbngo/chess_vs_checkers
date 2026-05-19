@@ -96,35 +96,71 @@ let hoverTooltip = null; // { piece, mx, my }
 function drawTooltip() {
   if (!hoverTooltip) return;
   const { piece, mx, my } = hoverTooltip;
-  const def = PIECE_DEFS[piece.type];
-  if (!def) return;
+  const pos = toChessNotation(piece.row, piece.col).toUpperCase();
 
-  const pos       = toChessNotation(piece.row, piece.col).toUpperCase();
-  const traitName = piece.trait
-    ? piece.trait.charAt(0).toUpperCase() + piece.trait.slice(1)
-    : null;
-
-  const lines = [
-    { text: `${def.name}  ${pos}`, bold: true, color: '#fff' },
-    { text: 'Owner: Chess', bold: false, color: '#aac8ff' },
-  ];
-  if (traitName) {
-    const traitColor = { Mercenary: '#ffd700', Iron: '#82d2ff', Raider: '#ff6400' }[traitName] || '#ccc';
-    lines.push({ text: `Trait: ${traitName}`, bold: false, color: traitColor });
-  }
-  if (def.description) {
-    const words = def.description.split(' ');
-    let line = '';
-    for (const w of words) {
-      if ((line + ' ' + w).trim().length > 34) {
-        lines.push({ text: line.trim(), bold: false, color: '#ddd' });
-        line = w;
-      } else {
-        line += (line ? ' ' : '') + w;
-      }
+  let lines = [];
+  if (piece.team === 'chess') {
+    const def = PIECE_DEFS[piece.type];
+    if (!def) return;
+    const traitName = piece.trait
+      ? piece.trait.charAt(0).toUpperCase() + piece.trait.slice(1)
+      : null;
+    lines = [
+      { text: `${def.name}  ${pos}`, bold: true, color: '#fff' },
+      { text: 'Owner: Chess', bold: false, color: '#aac8ff' },
+    ];
+    if (traitName) {
+      const traitColor = { Mercenary: '#ffd700', Iron: '#82d2ff', Raider: '#ff6400' }[traitName] || '#ccc';
+      lines.push({ text: `Trait: ${traitName}`, bold: false, color: traitColor });
     }
-    if (line) lines.push({ text: line.trim(), bold: false, color: '#ddd' });
+    if (def.description) {
+      const words = def.description.split(' ');
+      let line = '';
+      for (const w of words) {
+        if ((line + ' ' + w).trim().length > 34) {
+          lines.push({ text: line.trim(), bold: false, color: '#ddd' });
+          line = w;
+        } else {
+          line += (line ? ' ' : '') + w;
+        }
+      }
+      if (line) lines.push({ text: line.trim(), bold: false, color: '#ddd' });
+    }
+  } else if (piece.team === 'checker') {
+    const typeStr = piece.isTripleKing ? 'Triple King'
+                  : piece.isFlyingKing ? 'Flying King'
+                  : piece.isKing ? 'Checker King'
+                  : 'Checker';
+    const typeKey = piece.isTripleKing ? 'checker_triple_king'
+                  : piece.isFlyingKing ? 'checker_flying_king'
+                  : piece.isKing ? 'checker_king'
+                  : 'checker';
+    lines = [
+      { text: `${typeStr}  ${pos}`, bold: true, color: '#fff' },
+      { text: 'Owner: Checkers', bold: false, color: '#ff8888' },
+    ];
+    const desc = CHECKER_DESCS[typeKey];
+    if (desc) {
+      const words = desc.split(' ');
+      let line = '';
+      for (const w of words) {
+        if ((line + ' ' + w).trim().length > 34) {
+          lines.push({ text: line.trim(), bold: false, color: '#ddd' });
+          line = w;
+        } else {
+          line += (line ? ' ' : '') + w;
+        }
+      }
+      if (line) lines.push({ text: line.trim(), bold: false, color: '#ddd' });
+    }
+  } else if (piece.team === 'go') {
+    lines = [
+      { text: `Go Stone  ${pos}`, bold: true, color: '#fff' },
+      { text: 'Owner: Go', bold: false, color: '#aaaa88' },
+    ];
   }
+
+  if (!lines.length) return;
 
   ctx.save();
   ctx.font = '13px sans-serif';
