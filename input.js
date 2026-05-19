@@ -72,7 +72,9 @@ function executeChessMove(piece, toRow, toCol) {
       if (piece.trait === 'mercenary' && (target || epCapture) && Math.random() < 1/3)
         state.chessPieces = state.chessPieces.filter(p => p.id !== piece.id);
 
-      syncBoard(); updateUI(); renderStrips();
+      syncBoard();
+      if (state.campaign === 'go') applyGoCaptures();
+      updateUI(); renderStrips();
 
       const ann = evaluateMove(piece, fromRow, fromCol, wasThreatenedBefore,
         target ?? epCapture, wasPromotion);

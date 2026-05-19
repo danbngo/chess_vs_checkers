@@ -6,6 +6,7 @@ for (const [key, src] of [
   ['pawn',         'images/pawn.png'],
   ['knight',       'images/knight.png'],
   ['bishop',       'images/bishop.png'],
+  ['rook',         'images/rook.png'],
   ['queen',        'images/queen.png'],
   ['king',         'images/king.png'],
   ['checker',             'images/checker.png'],
@@ -19,6 +20,7 @@ for (const [key, src] of [
   ['berolina_pawn', 'images/berolina_pawn.png'],
   ['camel',         'images/camel.png'],
   ['nightrider',    'images/nightrider.png'],
+  ['go_piece',      'images/go_piece.png'],
 ]) {
   const img = new Image();
   img.onload = () => {
@@ -279,24 +281,31 @@ function renderStrips() {
 
 // ─── Go piece rendering ───────────────────────────────────────────────────────
 function drawGoPiece(g) {
-  const x = g.col * CELL + CELL/2, y = g.row * CELL + CELL/2;
-  const r = CELL * 0.36;
+  const { x, y } = getPieceRenderPos(g);
+  if (!imgReady('go_piece')) return;
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.55)';
-  ctx.shadowBlur  = 7;
-  ctx.fillStyle   = '#111';
-  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
-  ctx.shadowBlur  = 0;
-  // Subtle specular highlight
-  ctx.fillStyle = 'rgba(255,255,255,0.13)';
-  ctx.beginPath(); ctx.arc(x - r*0.28, y - r*0.32, r*0.42, 0, Math.PI*2); ctx.fill();
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur  = 6;
+  drawPieceImage('go_piece', x, y, null);
   ctx.restore();
+}
+
+// ─── Go territory overlay ─────────────────────────────────────────────────────
+function drawGoTerritoryOverlay() {
+  if (state.campaign !== 'go') return;
+  const reach = findReachableSquares();
+  ctx.fillStyle = 'rgba(180,30,30,0.22)';
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (!reach[r][c] && !state.board[r]?.[c]) // enclosed empty squares only
+        ctx.fillRect(c*CELL, r*CELL, CELL, CELL);
 }
 
 // ─── Board rendering ──────────────────────────────────────────────────────────
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawBoard();
+  drawGoTerritoryOverlay();
   if (state.campaign !== 'go') drawCheckIndicator();
   drawHighlights();
 
@@ -371,17 +380,6 @@ function drawHighlights() {
 // ─── Piece drawing ────────────────────────────────────────────────────────────
 const TRAIT_OUTLINE = { mercenary: 'rgba(255,215,0,0.92)', iron: 'rgba(130,210,255,0.92)', raider: 'rgba(255,100,0,0.92)' };
 
-// Fallback image key + distinctive tint for each variant, used until dedicated art is loaded.
-const VARIANT_RENDER = {
-  amazon:        { fallback: 'queen',  tint: TINT_AMAZON      },
-  archbishop:    { fallback: 'bishop', tint: TINT_ARCHBISHOP  },
-  chancellor:    { fallback: 'rook',   tint: TINT_CHANCELLOR  },
-  grasshopper:   { fallback: 'queen',  tint: TINT_GRASSHOPPER },
-  berolina_pawn: { fallback: 'pawn',   tint: TINT_BEROLINA    },
-  camel:         { fallback: 'knight', tint: TINT_CAMEL       },
-  nightrider:    { fallback: 'knight', tint: TINT_NIGHTRIDER  },
-};
-
 // Draw the piece tinted with outlineColor at 4 diagonal offsets to create an outline effect.
 function drawOutline(key, x, y, outlineColor) {
   const img = IMAGES[key];
@@ -410,16 +408,13 @@ function drawPieceImage(key, x, y, tintColor) {
 
 function drawChessPiece(p) {
   const { x, y } = getPieceRenderPos(p);
-  const vr     = VARIANT_RENDER[p.type];
-  const imgKey = vr && !imgReady(p.type) ? vr.fallback : p.type;
-  const tint   = vr ? vr.tint : TINT_CHESS;
-  if (!imgReady(imgKey)) return;
+  if (!imgReady(p.type)) return;
   const outlineColor = TRAIT_OUTLINE[p.trait];
-  if (outlineColor) drawOutline(imgKey, x, y, outlineColor);
+  if (outlineColor) drawOutline(p.type, x, y, outlineColor);
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.5)';
   ctx.shadowBlur  = activeAnims.has(p.id) ? 14 : 6;
-  drawPieceImage(imgKey, x, y, tint);
+  drawPieceImage(p.type, x, y, TINT_CHESS);
   ctx.restore();
 }
 

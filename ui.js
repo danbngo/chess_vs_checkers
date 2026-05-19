@@ -3,9 +3,15 @@ function updateUI() {
   document.getElementById('wave-label').textContent  = `Wave ${state.wave}`;
   document.getElementById('moves-label').textContent = `Moves: ${state.moveCount}`;
   document.getElementById('score-label').textContent = `$${state.dollars}`;
-  const pot = state.waveCheckerCount > 0
-    ? calcEarnings(state.moveCount, state.waveCheckerCount) : 0;
-  document.getElementById('potential-label').textContent = pot > 0 ? `(+$${pot})` : '';
+  if (state.campaign === 'go') {
+    const goArea = countGoTerritory();
+    const pct    = Math.round(goArea / 64 * 100);
+    document.getElementById('potential-label').textContent = `Territory: ${pct}%`;
+  } else {
+    const pot = state.waveCheckerCount > 0
+      ? calcEarnings(state.moveCount, state.waveCheckerCount) : 0;
+    document.getElementById('potential-label').textContent = pot > 0 ? `(+$${pot})` : '';
+  }
 }
 
 function showMessage(title, body, onContinue) {

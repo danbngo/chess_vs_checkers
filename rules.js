@@ -38,12 +38,17 @@ function getLegalMoves(piece) {
   const raw = PIECE_DEFS[piece.type].getMoves(piece.row, piece.col, state.board);
 
   if (state.campaign === 'go') {
-    // Go campaign: no check rules, but pieces can't land on enclosed empty squares
-    const reach = findReachableSquares();
+    // Go campaign: no check rules, but no-suicide (chess group at destination must retain liberty)
     return raw.filter(([mr, mc]) => {
-      const dest = state.board[mr]?.[mc];
-      if (dest?.team === 'go') return true;   // capturing a go stone is always allowed
-      return reach[mr]?.[mc] ?? false;         // can't enter enclosed empty squares
+      const temp = state.board.map(row => [...row]);
+      temp[piece.row][piece.col] = null;
+      temp[mr][mc] = { ...piece, row: mr, col: mc };
+      // Capture any go groups that become dead after this chess move
+      const deadGo = findDeadGroups('go', temp);
+      for (const group of deadGo) for (const [r, c] of group) temp[r][c] = null;
+      // No-suicide: the chess group at the destination must have at least 1 liberty
+      const group = getGroup(mr, mc, temp, 'chess');
+      return getGroupLiberties(group, temp) > 0;
     });
   }
 
