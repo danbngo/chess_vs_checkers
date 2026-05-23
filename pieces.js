@@ -5,7 +5,8 @@ function slidingMoves(r, c, board, dirs) {
     let nr = r+dr, nc = c+dc;
     while (nr>=0 && nr<ROWS && nc>=0 && nc<COLS) {
       if (board[nr][nc]) {
-        if (board[nr][nc].team === 'checker') moves.push([nr, nc]);
+        if (board[nr][nc].team === 'checker' || board[nr][nc].team === 'go')
+          moves.push([nr, nc]);
         break;
       }
       moves.push([nr, nc]);
@@ -25,7 +26,8 @@ const PIECE_DEFS = {
       if (r>0 && !board[r-1][c]) moves.push([r-1, c]);
       if (r===6 && !board[r-1][c] && !board[r-2][c]) moves.push([r-2, c]);
       for (const dc of [-1, 1])
-        if (c+dc>=0 && c+dc<COLS && r>0 && board[r-1][c+dc]?.team==='checker')
+        if (c+dc>=0 && c+dc<COLS && r>0 &&
+            (board[r-1][c+dc]?.team==='checker' || board[r-1][c+dc]?.team==='go'))
           moves.push([r-1, c+dc]);
       if (r===3) {
         for (const dc of [-1, 1]) {
