@@ -363,7 +363,7 @@ function animateSingleChecker(ck, mustCapture = false, preChosenMove = null) {
     syncBoard(); updateUI(); renderStrips();
 
     const cont = () => {
-      if (capture) {
+      if (capture && !promoted) {
         const nextCaps = getCheckerMoves(ck).filter(m => m.capture && !m.capture.dying);
         if (nextCaps.length) { setTimeout(() => animateMultiJump(ck, checkerTurnDone), 150); return; }
       }
@@ -414,7 +414,7 @@ function animateMultiJump(ck, onDone) {
     syncBoard(); updateUI(); renderStrips();
 
     const cont = () => {
-      const next = getCheckerMoves(ck).filter(m => m.capture && !m.capture.dying);
+      const next = promoted ? [] : getCheckerMoves(ck).filter(m => m.capture && !m.capture.dying);
       if (next.length) setTimeout(() => animateMultiJump(ck, onDone), 150);
       else             setTimeout(onDone, 60);
     };

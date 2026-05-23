@@ -261,7 +261,16 @@ function showPromotion(piece, onChoice) {
   for (const type of ['queen', 'knight']) {
     const btn = document.createElement('button');
     btn.className = 'piece-option-btn';
-    btn.textContent = PIECE_DEFS[type].name;
+
+    const icon = document.createElement('canvas');
+    icon.width = 72; icon.height = 72;
+    drawShopIcon(icon, type, null);
+
+    const label = document.createElement('span');
+    label.textContent = PIECE_DEFS[type].name;
+
+    btn.appendChild(icon);
+    btn.appendChild(label);
     btn.onclick = () => {
       document.getElementById('promo-overlay').classList.add('hidden');
       onChoice(type);
