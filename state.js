@@ -128,12 +128,20 @@ function startWave(wave, chessPieces) {
     }));
 
   const allowLight = wave >= 2;
-  const ckSlots = checkerStartPositions(cfg.checkerCount, allowLight);
-  const hasStartKings = !!(cfg.kingsAt && cfg.kingsAt > 0);
+  const ckSlots    = checkerStartPositions(cfg.checkerCount, allowLight);
+  const total       = ckSlots.length;
+  const kingCount   = Math.round(total * kingFraction(wave));
+  const tripleCount = Math.round(kingCount * tripleKingFraction(wave));
+  const flyingCount = Math.min(
+    kingCount - tripleCount,
+    Math.round(kingCount * flyingKingFraction(wave))
+  );
+
   state.checkers = ckSlots.map(({ pos: [r, c], isLight }, i) => {
-    const isKing = hasStartKings && i < cfg.kingsAt;
-    const isFlyingKing = isKing && wave >= FLYING_KING_WAVE && (i === 0 || Math.random() < 0.5);
-    return { type: 'checker', team: 'checker', row: r, col: c, isLight, isKing, isFlyingKing, isTripleKing: false, dying: false, id: newId() };
+    const isKing       = i < kingCount;
+    const isTripleKing = isKing && i < tripleCount;
+    const isFlyingKing = isKing && !isTripleKing && (i - tripleCount) < flyingCount;
+    return { type: 'checker', team: 'checker', row: r, col: c, isLight, isKing, isFlyingKing, isTripleKing, dying: false, id: newId() };
   });
 
   state.waveCheckerCount = state.checkers.length;
@@ -142,6 +150,10 @@ function startWave(wave, chessPieces) {
   if (wave === FLYING_KING_WAVE) {
     showMessage('Flying Kings!',
       'Some checker kings can now slide diagonally any distance. Promoted kings inherit this ability if any flying king is still alive.', () => {});
+  }
+  if (wave === TRIPLE_KING_WAVE) {
+    showMessage('Double Kings!',
+      'Some checker kings have returned to their home row to become Double Kings. They can capture two enemies in one jump and hop over allied pieces.', () => {});
   }
 }
 

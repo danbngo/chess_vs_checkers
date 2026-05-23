@@ -1,26 +1,3 @@
-// ─── Shop icon rendering ──────────────────────────────────────────────────────
-function drawShopIcon(iconCanvas, type, trait) {
-  const ictx = iconCanvas.getContext('2d');
-  const sz   = iconCanvas.width;
-  ictx.clearRect(0, 0, sz, sz);
-  const vr     = VARIANT_RENDER[type];
-  const imgKey = vr && !imgReady(type) ? vr.fallback : type;
-  const tint   = vr ? vr.tint : TINT_CHESS;
-  if (!imgReady(imgKey)) return;
-  const img   = IMAGES[imgKey];
-  const pad   = 5, maxD = sz - pad * 2;
-  const ratio = img.naturalWidth / img.naturalHeight;
-  const w  = ratio >= 1 ? maxD : maxD * ratio;
-  const h  = ratio >= 1 ? maxD / ratio : maxD;
-  const dx = sz / 2 - w / 2, dy = sz / 2 - h / 2;
-  if (trait && TRAIT_OUTLINE[trait]) {
-    const ol = getTinted(imgKey, TRAIT_OUTLINE[trait]);
-    if (ol) for (const [ox, oy] of [[-1,-1],[-1,1],[1,-1],[1,1]])
-      ictx.drawImage(ol, dx + ox, dy + oy, w, h);
-  }
-  ictx.drawImage(getTinted(imgKey, tint) || img, dx, dy, w, h);
-}
-
 // ─── Shop tooltip ─────────────────────────────────────────────────────────────
 const TRAIT_DESCS = {
   mercenary: 'Costs half price. After each capture, has a 1/3 chance to desert your army permanently.',
@@ -73,7 +50,7 @@ function showMessage(title, body, onContinue) {
 
 // ─── Earnings & shop ──────────────────────────────────────────────────────────
 function calcEarnings(moveCount, checkerCount) {
-  return 5 + Math.max(0, (10 + 3 * checkerCount) - moveCount);
+  return 5 + Math.max(0, 4 * checkerCount - moveCount);
 }
 
 function pickTrait(wave) {
@@ -109,7 +86,7 @@ function waveShopAdditions(wave) {
     }
   }
 
-  const count = Math.min(2 + Math.floor((wave - 1) / 2), 5);
+  const count = 5;
   const picks = [];
 
   if (frontSpace > 0) {

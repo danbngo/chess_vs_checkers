@@ -363,6 +363,24 @@ function drawBoard() {
       ctx.fillStyle = (r+c)%2===0 ? CLR.lightSquare : CLR.darkSquare;
       ctx.fillRect(c*CELL, r*CELL, CELL, CELL);
     }
+
+  ctx.font = 'bold 11px sans-serif';
+  const onLight = 'rgba(100,60,20,0.7)';
+  const onDark  = 'rgba(240,210,160,0.7)';
+
+  // Rank numbers (8–1) in top-left corner of left-column squares
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  for (let r = 0; r < ROWS; r++) {
+    ctx.fillStyle = (r % 2 === 0) ? onLight : onDark;
+    ctx.fillText(String(8 - r), 3, r * CELL + 2);
+  }
+
+  // File letters (a–h) in bottom-right corner of bottom-row squares
+  ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+  for (let c = 0; c < COLS; c++) {
+    ctx.fillStyle = ((ROWS - 1 + c) % 2 === 0) ? onLight : onDark;
+    ctx.fillText(String.fromCharCode(97 + c), (c + 1) * CELL - 3, ROWS * CELL - 2);
+  }
 }
 
 function drawCheckIndicator() {
@@ -389,15 +407,25 @@ function drawHighlights() {
   for (const [mr, mc] of rawMoves)
     if (!legalSet.has(mr*COLS+mc)) ctx.fillRect(mc*CELL, mr*CELL, CELL, CELL);
 
-  // Blue: legal captures. Green: legal non-captures.
+  // Blue: legal captures. Yellow: legal move but destination is under attack. Green: safe legal move.
   for (const [mr, mc] of moves) {
     const target = state.board[mr]?.[mc];
-    let isCapture = target?.team === 'checker';
+    let isCapture = target?.team === 'checker' || target?.team === 'go';
     const isEP = !isCapture && piece.type==='pawn' && piece.row===3 && mc!==piece.col && !target &&
       state.enPassantCheckers.has(state.board[piece.row]?.[mc]?.id);
     if (isEP) isCapture = true;
 
-    ctx.fillStyle = isCapture ? CLR.attackHL : CLR.highlight;
+    let hlColor = CLR.highlight;
+    if (isCapture) {
+      hlColor = CLR.attackHL;
+    } else if (state.campaign !== 'go') {
+      // Simulate the board after this move to check if the destination would be threatened
+      const tempBoard = state.board.map(row => [...row]);
+      tempBoard[piece.row][piece.col] = null;
+      tempBoard[mr][mc] = { ...piece, row: mr, col: mc };
+      if (isThreatenedByChecker(mr, mc, tempBoard)) hlColor = 'rgba(255,210,0,0.55)';
+    }
+    ctx.fillStyle = hlColor;
     ctx.fillRect(mc*CELL, mr*CELL, CELL, CELL);
 
     if (isCapture) {
@@ -415,6 +443,40 @@ function drawHighlights() {
 
 // ─── Piece drawing ────────────────────────────────────────────────────────────
 const TRAIT_OUTLINE = { mercenary: 'rgba(255,215,0,0.92)', iron: 'rgba(130,210,255,0.92)', raider: 'rgba(255,100,0,0.92)' };
+
+// Fallback image key + distinctive tint for each variant, used until dedicated art is loaded.
+const VARIANT_RENDER = {
+  amazon:        { fallback: 'queen',  tint: TINT_AMAZON      },
+  archbishop:    { fallback: 'bishop', tint: TINT_ARCHBISHOP  },
+  chancellor:    { fallback: 'rook',   tint: TINT_CHANCELLOR  },
+  grasshopper:   { fallback: 'queen',  tint: TINT_GRASSHOPPER },
+  berolina_pawn: { fallback: 'pawn',   tint: TINT_BEROLINA    },
+  camel:         { fallback: 'knight', tint: TINT_CAMEL       },
+  nightrider:    { fallback: 'knight', tint: TINT_NIGHTRIDER  },
+};
+
+// Render a piece icon into a small canvas (used by the shop).
+function drawShopIcon(iconCanvas, type, trait) {
+  const ictx = iconCanvas.getContext('2d');
+  const sz   = iconCanvas.width;
+  ictx.clearRect(0, 0, sz, sz);
+  const vr     = VARIANT_RENDER[type];
+  const imgKey = vr && !imgReady(type) ? vr.fallback : type;
+  const tint   = vr ? vr.tint : TINT_CHESS;
+  if (!imgReady(imgKey)) return;
+  const img   = IMAGES[imgKey];
+  const pad   = 5, maxD = sz - pad * 2;
+  const ratio = img.naturalWidth / img.naturalHeight;
+  const w  = ratio >= 1 ? maxD : maxD * ratio;
+  const h  = ratio >= 1 ? maxD / ratio : maxD;
+  const dx = sz / 2 - w / 2, dy = sz / 2 - h / 2;
+  if (trait && TRAIT_OUTLINE[trait]) {
+    const ol = getTinted(imgKey, TRAIT_OUTLINE[trait]);
+    if (ol) for (const [ox, oy] of [[-1,-1],[-1,1],[1,-1],[1,1]])
+      ictx.drawImage(ol, dx + ox, dy + oy, w, h);
+  }
+  ictx.drawImage(getTinted(imgKey, tint) || img, dx, dy, w, h);
+}
 
 // Draw the piece tinted with outlineColor at 4 diagonal offsets to create an outline effect.
 function drawOutline(key, x, y, outlineColor) {
@@ -444,13 +506,16 @@ function drawPieceImage(key, x, y, tintColor) {
 
 function drawChessPiece(p) {
   const { x, y } = getPieceRenderPos(p);
-  if (!imgReady(p.type)) return;
+  const vr     = VARIANT_RENDER[p.type];
+  const imgKey = vr && !imgReady(p.type) ? vr.fallback : p.type;
+  const tint   = vr ? vr.tint : TINT_CHESS;
+  if (!imgReady(imgKey)) return;
   const outlineColor = TRAIT_OUTLINE[p.trait];
-  if (outlineColor) drawOutline(p.type, x, y, outlineColor);
+  if (outlineColor) drawOutline(imgKey, x, y, outlineColor);
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.5)';
   ctx.shadowBlur  = activeAnims.has(p.id) ? 14 : 6;
-  drawPieceImage(p.type, x, y, TINT_CHESS);
+  drawPieceImage(imgKey, x, y, tint);
   ctx.restore();
 }
 

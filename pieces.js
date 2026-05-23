@@ -234,11 +234,30 @@ const WAVE_CONFIG = [
   { checkerCount: 6  },
   { checkerCount: 8  },
   { checkerCount: 10 },
-  { checkerCount: 12, kingsAt: 4 },
+  { checkerCount: 12 },
 ];
 
 function getWaveConfig(wave) {
-  if (wave <= WAVE_CONFIG.length) return WAVE_CONFIG[wave-1];
-  const last = WAVE_CONFIG[WAVE_CONFIG.length-1];
-  return { checkerCount: last.checkerCount + (wave - WAVE_CONFIG.length)*2, kingsAt: last.kingsAt };
+  if (wave <= WAVE_CONFIG.length) return WAVE_CONFIG[wave - 1];
+  const last = WAVE_CONFIG[WAVE_CONFIG.length - 1];
+  return { checkerCount: last.checkerCount + (wave - WAVE_CONFIG.length) * 2 };
+}
+
+// Fraction of checkers that start as kings (0→50% over waves 2–5, 50→100% over waves 5–10).
+function kingFraction(wave) {
+  if (wave <= 2) return 0;
+  if (wave <= 5) return (wave - 2) / 3 * 0.5;
+  return Math.min(1, 0.5 + (wave - 5) / 5 * 0.5);
+}
+
+// Fraction of kings that are flying kings (25% at wave 5, 50% at wave 10).
+function flyingKingFraction(wave) {
+  if (wave < FLYING_KING_WAVE) return 0;
+  return Math.min(0.5, 0.25 + (wave - FLYING_KING_WAVE) / 5 * 0.25);
+}
+
+// Fraction of kings that are triple/double kings (25% at wave 8, 50% at wave 10).
+function tripleKingFraction(wave) {
+  if (wave < TRIPLE_KING_WAVE) return 0;
+  return Math.min(0.5, 0.25 + (wave - TRIPLE_KING_WAVE) / 2 * 0.25);
 }

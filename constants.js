@@ -19,7 +19,8 @@ const PIECE_COSTS    = {
   amazon: 110, archbishop: 55, chancellor: 70, grasshopper: 22,
   berolina_pawn: 10, camel: 18, nightrider: 38,
 };
-const FLYING_KING_WAVE = 5;
+const FLYING_KING_WAVE  = 5;
+const TRIPLE_KING_WAVE  = 8;
 const MAX_WAVE = 10;
 
 // ─── Colours ──────────────────────────────────────────────────────────────────

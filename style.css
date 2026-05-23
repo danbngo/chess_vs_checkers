@@ -430,6 +430,7 @@ body {
   color: #ccd8f0;
   max-width: 230px;
   line-height: 1.55;
+  text-align: left;
   pointer-events: none;
   display: none;
   box-shadow: 0 4px 18px rgba(0,0,0,0.65);

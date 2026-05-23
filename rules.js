@@ -160,7 +160,8 @@ function rateMove(ck, move) {
   const currentlyInDanger = isAttackedByChess(ck.row, ck.col, state.board);
   const canThreaten    = canCaptureFromPos(ck, move.row, move.col, tempBoard);
 
-  const promotes = !ck.isKing && move.row === ROWS - 1;
+  const promotes = (!ck.isKing && move.row === ROWS - 1) ||
+                   (ck.isKing && !ck.isTripleKing && move.row === 0);
 
   if (!destSafe)               return 1;   // moves into range of a chess piece — avoid
   if (currentlyInDanger && canThreaten) return 60; // escape + can threaten from safety
@@ -196,7 +197,9 @@ function runCheckerTurn() {
     return;
   }
 
-  // No captures: score every (checker, move) pair and pick the globally best option
+  // Score every (checker, move) pair and pick the globally best option.
+  // Escape (30) beats neutral (10) beats doomed-all-unsafe (1), so threatened pieces
+  // that can escape naturally win; doomed pieces correctly lose to neutral moves.
   let bestScore = -Infinity, bestOptions = [];
   for (const ck of alive) {
     for (const move of getCheckerMoves(ck)) {
@@ -254,7 +257,7 @@ function animateSingleChecker(ck, mustCapture = false, preChosenMove = null) {
       ck.isKing = true;
       ck.isFlyingKing = state.wave >= FLYING_KING_WAVE && state.checkers.some(c => c.isFlyingKing);
     }
-    if (ck.isKing && !ck.isTripleKing && ck.row === 0) ck.isTripleKing = true;
+    if (ck.isKing && !ck.isTripleKing && !ck.isFlyingKing && ck.row === 0) ck.isTripleKing = true;
     if (ck.row === 3) state.enPassantCheckers.add(ck.id);
     syncBoard(); updateUI(); renderStrips();
 
@@ -290,7 +293,7 @@ function animateMultiJump(ck, onDone) {
       ck.isKing = true;
       ck.isFlyingKing = state.wave >= FLYING_KING_WAVE && state.checkers.some(c => c.isFlyingKing);
     }
-    if (ck.isKing && !ck.isTripleKing && ck.row === 0) ck.isTripleKing = true;
+    if (ck.isKing && !ck.isTripleKing && !ck.isFlyingKing && ck.row === 0) ck.isTripleKing = true;
     if (ck.row === 3) state.enPassantCheckers.add(ck.id);
     syncBoard(); updateUI(); renderStrips();
 
