@@ -21,6 +21,7 @@ let state = {
   revivedPieces: [],
   seenKingWarning: false,
   seenLightWarning: false,
+  seenTutorial: false,
 };
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -195,6 +196,11 @@ function startWave(wave, chessPieces) {
   if (wave === TRIPLE_KING_WAVE) {
     showMessage('Double Kings!',
       'Some checker kings have returned to their home row to become Double Kings. They can capture two enemies in one jump and hop over allied pieces.', () => {});
+  }
+  if (wave === 1 && !state.seenTutorial) {
+    state.seenTutorial = true;
+    showMessage('How to Play',
+      'Defeat all checkers pieces each wave to advance. Don\'t let your King be captured! Finishing faster earns more money for the shop between waves. Survive all 10 waves to win!', () => {});
   }
 }
 
