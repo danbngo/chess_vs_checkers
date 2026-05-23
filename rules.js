@@ -1,24 +1,97 @@
-// ─── Check detection ──────────────────────────────────────────────────────────
-function isThreatenedByChecker(row, col, board) {
-  for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
-    // Landing square — where the checker would land after jumping over (row,col)
-    const lr = row+dr, lc = col+dc;
-    if (lr<0 || lr>=ROWS || lc<0 || lc>=COLS || board[lr]?.[lc]) continue;
-    // Scan backward along the diagonal for a threatening checker
-    let r = row-dr, c = col-dc, dist = 1;
-    while (r>=0 && r<ROWS && c>=0 && c<COLS) {
-      const p = board[r]?.[c];
-      if (p) {
-        if (p.team === 'checker') {
-          if ( p.isKing && (dist===1 || p.isFlyingKing)) return true;
-          if (!p.isKing && dist===1 && dr>0)             return true; // forward only
-        }
-        break;
-      }
-      r -= dr; c -= dc; dist++;
+// ─── Check detection (multi-jump aware) ───────────────────────────────────────
+// Returns true if any checker on `board` can reach (targetRow, targetCol) via
+// one or more captures (including multi-jump chains).
+function isThreatenedByChecker(targetRow, targetCol, board) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const ck = board[r]?.[c];
+      if (ck?.team !== 'checker') continue;
+      if (_ckCanReach(ck, r, c, targetRow, targetCol, new Set(), board)) return true;
     }
   }
   return false;
+}
+
+// DFS: can checker ck, currently at (curRow,curCol) with capturedIds already
+// virtually removed, reach (targetRow,targetCol) via one or more captures?
+// No cycle-detection needed: each recursive call adds ≥1 piece to capturedIds,
+// bounding depth by the number of chess pieces.
+function _ckCanReach(ck, curRow, curCol, targetRow, targetCol, capturedIds, board) {
+  const dirs = ck.isKing ? [[-1,-1],[-1,1],[1,-1],[1,1]] : [[1,-1],[1,1]];
+
+  if (ck.isFlyingKing) {
+    for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
+      // Slide along diagonal; virtually-captured pieces are transparent
+      let r = curRow+dr, c = curCol+dc;
+      let capPiece = null, capR = -1, capC = -1;
+      while (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+        const cell = board[r][c];
+        if (!cell || (cell && capturedIds.has(cell.id))) { r += dr; c += dc; continue; }
+        if (cell.team === 'chess') { capPiece = cell; capR = r; capC = c; }
+        break; // blocked (or found capture target)
+      }
+      if (!capPiece) continue;
+      // Any empty (or virtually-captured) square past the captured piece is a valid landing
+      const newCap = new Set(capturedIds); newCap.add(capPiece.id);
+      let lr = capR+dr, lc = capC+dc;
+      while (lr >= 0 && lr < ROWS && lc >= 0 && lc < COLS) {
+        const land = board[lr][lc];
+        if (land && !capturedIds.has(land.id)) break; // real occupied square
+        if (lr === targetRow && lc === targetCol) return true;
+        if (_ckCanReach(ck, lr, lc, targetRow, targetCol, newCap, board)) return true;
+        lr += dr; lc += dc;
+      }
+    }
+    return false;
+  }
+
+  // Regular checker or non-flying king
+  for (const [dr, dc] of dirs) {
+    const nr = curRow+dr, nc = curCol+dc;
+    if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) continue;
+    const mid = board[nr][nc];
+    // Must jump over a real (not already captured) chess piece
+    if (!mid || capturedIds.has(mid.id) || mid.team !== 'chess') continue;
+    const lr = nr+dr, lc = nc+dc;
+    if (lr < 0 || lr >= ROWS || lc < 0 || lc >= COLS) continue;
+    const land = board[lr][lc];
+    const landFree = !land || capturedIds.has(land.id);
+
+    if (landFree) {
+      // Standard single capture
+      if (lr === targetRow && lc === targetCol) return true;
+      const newCap = new Set(capturedIds); newCap.add(mid.id);
+      if (_ckCanReach(ck, lr, lc, targetRow, targetCol, newCap, board)) return true;
+    } else if (ck.isTripleKing && land.team === 'chess' && !capturedIds.has(land.id)) {
+      // Triple king double-capture: jump over mid AND land (which is also a chess piece)
+      const lr2 = lr+dr, lc2 = lc+dc;
+      if (lr2 >= 0 && lr2 < ROWS && lc2 >= 0 && lc2 < COLS) {
+        const land2 = board[lr2][lc2];
+        if (!land2 || capturedIds.has(land2.id)) {
+          if (lr2 === targetRow && lc2 === targetCol) return true;
+          const newCap = new Set(capturedIds); newCap.add(mid.id); newCap.add(land.id);
+          if (_ckCanReach(ck, lr2, lc2, targetRow, targetCol, newCap, board)) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// Returns all enemy checkers a player-controlled checker captures when moving to (toRow,toCol).
+// Scans along the diagonal path; flying kings may pass multiple squares before the captured piece.
+function findPlayerCheckerCaptures(piece, toRow, toCol, board) {
+  if (Math.abs(toRow - piece.row) <= 1) return [];
+  const dr = Math.sign(toRow - piece.row);
+  const dc = Math.sign(toCol - piece.col);
+  const captured = [];
+  let r = piece.row + dr, c = piece.col + dc;
+  while (r !== toRow || c !== toCol) {
+    const p = board[r]?.[c];
+    if (p?.team === 'checker') captured.push(p);
+    r += dr; c += dc;
+  }
+  return captured;
 }
 
 function isKingInCheckAfterMove(piece, toRow, toCol, epCol) {
@@ -26,6 +99,11 @@ function isKingInCheckAfterMove(piece, toRow, toCol, epCol) {
   temp[piece.row][piece.col] = null;
   if (temp[toRow][toCol]?.team === 'checker') temp[toRow][toCol] = null;
   if (epCol !== undefined) temp[piece.row][epCol] = null;
+  // Player checker jump captures: remove jumped-over enemy checkers from temp board
+  if (piece.type === 'checker' && piece.team === 'chess') {
+    for (const cap of findPlayerCheckerCaptures(piece, toRow, toCol, temp))
+      temp[cap.row][cap.col] = null;
+  }
   temp[toRow][toCol] = { ...piece, row: toRow, col: toCol };
   const king = piece.type === 'king'
     ? { row: toRow, col: toCol }
@@ -35,7 +113,7 @@ function isKingInCheckAfterMove(piece, toRow, toCol, epCol) {
 }
 
 function getLegalMoves(piece) {
-  const raw = PIECE_DEFS[piece.type].getMoves(piece.row, piece.col, state.board);
+  const raw = getMovesForPiece(piece, state.board);
 
   if (state.campaign === 'go') {
     // Go campaign: no check rules, but no-suicide (chess group at destination must retain liberty)
@@ -142,7 +220,7 @@ function getCheckerMoves(ck) {
 function isAttackedByChess(row, col, board) {
   for (const p of state.chessPieces) {
     if (p.dying) continue;
-    if (PIECE_DEFS[p.type].getMoves(p.row, p.col, board).some(([mr, mc]) => mr === row && mc === col))
+    if (getMovesForPiece(p, board).some(([mr, mc]) => mr === row && mc === col))
       return true;
   }
   return false;

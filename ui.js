@@ -12,6 +12,10 @@ const TRAITS = {
     name:        'Raider',
     description: 'Costs 1.5× the base price. Earns $3 for every enemy it captures.',
   },
+  chameleon: {
+    name:        'Chameleon',
+    description: 'After each capture, transforms into the captured checker type (regular, king, flying, or triple). Reverts at wave end.',
+  },
 };
 
 let _shopTip = null;
@@ -73,6 +77,13 @@ function pickTrait(wave) {
   const chance = (wave - 1) / Math.max(1, MAX_WAVE - 2);
   if (Math.random() > chance) return null;
   const r = Math.random();
+  if (state.campaign === 'checkers') {
+    if (r < 0.25) return 'mercenary';
+    if (r < 0.50) return 'iron';
+    if (r < 0.75) return 'raider';
+    return 'chameleon';
+  }
+  // Go campaign: no chameleon (go pieces are useless to transform into)
   if (r < 1/3) return 'mercenary';
   if (r < 2/3) return 'iron';
   return 'raider';

@@ -220,6 +220,68 @@ const PIECE_DEFS = {
 // Front-row pieces go to row 6; all others go to row 7
 function isFrontRowType(type) { return type === 'pawn' || type === 'berolina_pawn'; }
 
+// ─── Player-controlled checker movement ───────────────────────────────────────
+// Returns [[row, col], ...] for a chess-team checker piece.
+// Forward direction is toward row 0 (opposite of enemy checkers).
+function getPlayerCheckerMoves(piece, board) {
+  const moves = [];
+  const dirs  = piece.isKing ? [[-1,-1],[-1,1],[1,-1],[1,1]] : [[-1,-1],[-1,1]];
+
+  if (piece.isFlyingKing) {
+    for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
+      let r = piece.row+dr, c = piece.col+dc;
+      while (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+        const t = board[r][c];
+        if (!t) {
+          moves.push([r, c]);
+        } else if (t.team === 'checker') {
+          // Slide past the captured piece to any empty landing square
+          let lr = r+dr, lc = c+dc;
+          while (lr >= 0 && lr < ROWS && lc >= 0 && lc < COLS) {
+            if (board[lr][lc]) break;
+            moves.push([lr, lc]);
+            lr += dr; lc += dc;
+          }
+          break;
+        } else {
+          break; // friendly chess piece blocks
+        }
+        r += dr; c += dc;
+      }
+    }
+    return moves;
+  }
+
+  for (const [dr, dc] of dirs) {
+    const nr = piece.row+dr, nc = piece.col+dc;
+    if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) continue;
+    const t = board[nr][nc];
+    if (!t) {
+      moves.push([nr, nc]);           // regular step
+    } else if (t.team === 'checker') {
+      const lr = nr+dr, lc = nc+dc;
+      if (lr < 0 || lr >= ROWS || lc < 0 || lc >= COLS) continue;
+      const land = board[lr][lc];
+      if (!land) {
+        moves.push([lr, lc]);         // single capture
+      } else if (piece.isTripleKing && land.team === 'checker') {
+        const lr2 = lr+dr, lc2 = lc+dc;
+        if (lr2 >= 0 && lr2 < ROWS && lc2 >= 0 && lc2 < COLS && !board[lr2][lc2])
+          moves.push([lr2, lc2]);     // double capture (triple king)
+      }
+    }
+    // friendly chess piece: blocked, no move
+  }
+  return moves;
+}
+
+// Unified move generator: handles both regular chess pieces and player checkers.
+function getMovesForPiece(piece, board) {
+  if (piece.type === 'checker' && piece.team === 'chess')
+    return getPlayerCheckerMoves(piece, board);
+  return PIECE_DEFS[piece.type].getMoves(piece.row, piece.col, board);
+}
+
 // ─── Chess starting slots (real chess positions) ───────────────────────────────
 // Pawns spread center-out: d2, e2, c2, f2, b2, g2, a2, h2
 const CHESS_SLOTS = {

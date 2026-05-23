@@ -99,8 +99,32 @@ function drawTooltip() {
   const { piece, mx, my } = hoverTooltip;
   const pos = toChessNotation(piece.row, piece.col).toUpperCase();
 
+  const traitColors = { Mercenary: '#ffd700', Iron: '#82d2ff', Raider: '#ff6400', Chameleon: '#c070ff' };
+
   let lines = [];
-  if (piece.team === 'chess') {
+  if (piece.team === 'chess' && piece.type === 'checker') {
+    // Chameleon-transformed player checker
+    const typeStr = piece.isTripleKing ? 'Triple King' : piece.isFlyingKing ? 'Flying King'
+                  : piece.isKing ? 'Checker King' : 'Checker';
+    const typeKey = piece.isTripleKing ? 'checker_triple_king' : piece.isFlyingKing ? 'checker_flying_king'
+                  : piece.isKing ? 'checker_king' : 'checker';
+    const traitName = piece.trait ? piece.trait.charAt(0).toUpperCase() + piece.trait.slice(1) : null;
+    lines = [
+      { text: `${typeStr}  ${pos}`, bold: true, color: '#c070ff' },
+      { text: 'Owner: Chess (Chameleon)', bold: false, color: '#aac8ff' },
+    ];
+    if (traitName) lines.push({ text: `Trait: ${traitName}`, bold: false, color: traitColors[traitName] || '#ccc' });
+    const desc = CHECKER_DESCS[typeKey];
+    if (desc) {
+      const words = desc.split(' ');
+      let line = '';
+      for (const w of words) {
+        if ((line + ' ' + w).trim().length > 34) { lines.push({ text: line.trim(), bold: false, color: '#ddd' }); line = w; }
+        else line += (line ? ' ' : '') + w;
+      }
+      if (line) lines.push({ text: line.trim(), bold: false, color: '#ddd' });
+    }
+  } else if (piece.team === 'chess') {
     const def = PIECE_DEFS[piece.type];
     if (!def) return;
     const traitName = piece.trait
@@ -111,8 +135,7 @@ function drawTooltip() {
       { text: 'Owner: Chess', bold: false, color: '#aac8ff' },
     ];
     if (traitName) {
-      const traitColor = { Mercenary: '#ffd700', Iron: '#82d2ff', Raider: '#ff6400' }[traitName] || '#ccc';
-      lines.push({ text: `Trait: ${traitName}`, bold: false, color: traitColor });
+      lines.push({ text: `Trait: ${traitName}`, bold: false, color: traitColors[traitName] || '#ccc' });
     }
     if (def.description) {
       const words = def.description.split(' ');
@@ -426,19 +449,22 @@ function drawHighlights() {
     ctx.fillRect(piece.col*CELL, piece.row*CELL, CELL, CELL);
 
     // Red: geometrically reachable but blocked by check
-    const rawMoves = PIECE_DEFS[piece.type].getMoves(piece.row, piece.col, state.board);
+    const rawMoves = getMovesForPiece(piece, state.board);
     const legalSet = new Set(moves.map(([r, c]) => r*COLS+c));
     ctx.fillStyle = CLR.illegalHL;
     for (const [mr, mc] of rawMoves)
       if (!legalSet.has(mr*COLS+mc)) ctx.fillRect(mc*CELL, mr*CELL, CELL, CELL);
 
-    // Blue: legal captures. Yellow: threatened destination. Green: safe move.
+    // Blue: legal captures. Red: threatened destination. Green: safe move.
     for (const [mr, mc] of moves) {
       const target = state.board[mr]?.[mc];
       let isCapture = target?.team === 'checker' || target?.team === 'go';
       const isEP = !isCapture && piece.type==='pawn' && piece.row===3 && mc!==piece.col && !target &&
         state.enPassantCheckers.has(state.board[piece.row]?.[mc]?.id);
       if (isEP) isCapture = true;
+      // Player checker: capture is a jump (nothing at landing square, but checker along path)
+      if (!isCapture && piece.type === 'checker' && piece.team === 'chess')
+        isCapture = findPlayerCheckerCaptures(piece, mr, mc, state.board).length > 0;
 
       let hlColor = CLR.highlight;
       if (isCapture) {
@@ -500,7 +526,7 @@ function drawHighlights() {
 }
 
 // ─── Piece drawing ────────────────────────────────────────────────────────────
-const TRAIT_OUTLINE = { mercenary: 'rgba(255,215,0,0.92)', iron: 'rgba(130,210,255,0.92)', raider: 'rgba(255,100,0,0.92)' };
+const TRAIT_OUTLINE = { mercenary: 'rgba(255,215,0,0.92)', iron: 'rgba(130,210,255,0.92)', raider: 'rgba(255,100,0,0.92)', chameleon: 'rgba(180,80,255,0.92)' };
 
 // Fallback image key + distinctive tint for each variant, used until dedicated art is loaded.
 const VARIANT_RENDER = {
@@ -564,6 +590,24 @@ function drawPieceImage(key, x, y, tintColor) {
 
 function drawChessPiece(p) {
   const { x, y } = getPieceRenderPos(p);
+
+  // Chameleon-transformed player checker: render as checker with chess team tint
+  if (p.type === 'checker') {
+    const imgKey = p.isTripleKing  ? 'checker_triple_king'
+                 : p.isFlyingKing  ? 'checker_flying_king'
+                 : p.isKing        ? 'checker_king'
+                 :                   'checker';
+    if (!imgReady(imgKey)) return;
+    const outlineColor = TRAIT_OUTLINE[p.trait];
+    if (outlineColor) drawOutline(imgKey, x, y, outlineColor);
+    ctx.save();
+    ctx.shadowColor = 'rgba(160,80,255,0.85)';
+    ctx.shadowBlur  = activeAnims.has(p.id) ? 16 : 10;
+    drawPieceImage(imgKey, x, y, TINT_CHESS);
+    ctx.restore();
+    return;
+  }
+
   const vr     = VARIANT_RENDER[p.type];
   const imgKey = vr && !imgReady(p.type) ? vr.fallback : p.type;
   const tint   = vr ? vr.tint : TINT_CHESS;

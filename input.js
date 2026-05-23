@@ -70,6 +70,13 @@ function executeChessMove(piece, toRow, toCol) {
     if (adj?.team === 'checker' && state.enPassantCheckers.has(adj.id)) epCapture = adj;
   }
 
+  // Player checker jump captures (chameleon-transformed pieces moving diagonally 2+ squares)
+  let playerCheckerCaptures = [];
+  if (piece.type === 'checker' && piece.team === 'chess') {
+    playerCheckerCaptures = findPlayerCheckerCaptures(piece, toRow, toCol, state.board);
+    for (const cap of playerCheckerCaptures) cap.dying = true;
+  }
+
   // Castling: detect and prepare rook movement
   let castleRook = null, castleRookToCol = -1;
   if (piece.type === 'king' && fromRow === 7 && Math.abs(toCol - fromCol) === 2) {
@@ -94,7 +101,6 @@ function executeChessMove(piece, toRow, toCol) {
 
     const finishMove = (wasPromotion) => {
       if (target?.team === 'go') {
-        // goPieces already removed at move start; just record the capture
         state.capturedGoByChess.push({ id: target.id });
       } else if (target?.team === 'checker') {
         state.checkers = state.checkers.filter(c => c.id !== target.id);
@@ -104,10 +110,43 @@ function executeChessMove(piece, toRow, toCol) {
         state.checkers = state.checkers.filter(c => c.id !== epCapture.id);
         state.capturedByChess.push({ isKing: epCapture.isKing, isLight: epCapture.isLight ?? false });
       }
-      // Raider: earns $1 per capture
-      if (piece.trait === 'raider' && (target || epCapture)) state.dollars += 3;
+      // Player checker jump captures
+      for (const cap of playerCheckerCaptures) {
+        state.checkers = state.checkers.filter(c => c.id !== cap.id);
+        state.capturedByChess.push({ isKing: cap.isKing, isLight: cap.isLight ?? false });
+      }
+
+      const anyCapture = target?.team === 'checker' || epCapture || playerCheckerCaptures.length > 0;
+
+      // Chameleon: transform into the captured checker (highest-rank capture wins)
+      if (piece.trait === 'chameleon') {
+        const checkerCaptures = [
+          ...(target?.team === 'checker' ? [target] : []),
+          ...(epCapture?.team === 'checker' ? [epCapture] : []),
+          ...playerCheckerCaptures,
+        ];
+        if (checkerCaptures.length > 0) {
+          const rank = c => (c.isFlyingKing ? 3 : c.isTripleKing ? 2 : c.isKing ? 1 : 0);
+          const best = checkerCaptures.reduce((b, c) => rank(c) > rank(b) ? c : b);
+          if (!piece.promotedFrom) piece.promotedFrom = piece.type; // remember original for reversion
+          piece.type        = 'checker';
+          piece.isKing      = best.isKing      ?? false;
+          piece.isFlyingKing = best.isFlyingKing ?? false;
+          piece.isTripleKing = best.isTripleKing ?? false;
+        }
+      }
+
+      // Player checker promotion: non-king reaching row 0 promotes to king
+      if (piece.type === 'checker' && piece.team === 'chess' && !piece.isKing && piece.row === 0) {
+        piece.isKing = true;
+        if (state.wave >= FLYING_KING_WAVE && Math.random() < 0.5) piece.isFlyingKing = true;
+        else if (state.wave >= TRIPLE_KING_WAVE)                    piece.isTripleKing = true;
+      }
+
+      // Raider: earns $3 per capture
+      if (piece.trait === 'raider' && anyCapture) state.dollars += 3;
       // Mercenary: 1/3 chance to desert after making a capture
-      if (piece.trait === 'mercenary' && (target || epCapture) && Math.random() < 1/3)
+      if (piece.trait === 'mercenary' && anyCapture && Math.random() < 1/3)
         state.chessPieces = state.chessPieces.filter(p => p.id !== piece.id);
 
       syncBoard();
@@ -115,7 +154,7 @@ function executeChessMove(piece, toRow, toCol) {
       updateUI(); renderStrips();
 
       const ann = evaluateMove(piece, fromRow, fromCol, wasThreatenedBefore,
-        target ?? epCapture, wasPromotion);
+        target ?? epCapture ?? playerCheckerCaptures[0], wasPromotion);
       showMoveAnnotation(ann, toCol, toRow);
 
       const allEnemiesDead = state.campaign === 'go'
@@ -142,7 +181,7 @@ function executeChessMove(piece, toRow, toCol) {
       const origType = piece.type;
       showPromotion(piece, (newType) => {
         piece.type         = newType;
-        piece.promotedFrom = origType; // remembered so it reverts at wave end
+        piece.promotedFrom = origType;
         finishMove(true);
       });
     } else {

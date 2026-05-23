@@ -129,9 +129,13 @@ function startWave(wave, chessPieces) {
   moveAnnotation = null;
 
   const revived = state.revivedPieces.splice(0);   // iron pieces from last wave
-  // Promoted pawns revert to pawns at wave start
+  // Promoted pawns and chameleon-transformed pieces revert to their original type
   const toPlace = [...chessPieces.filter(p => !p.dying), ...revived]
-    .map(p => p.promotedFrom ? { ...p, type: p.promotedFrom, promotedFrom: null } : p);
+    .map(p => {
+      if (!p.promotedFrom) return p;
+      const { promotedFrom, isKing, isFlyingKing, isTripleKing, ...rest } = p;
+      return { ...rest, type: promotedFrom };
+    });
   state.chessPieces = assignPlacements(toPlace)
     .map(({ piece, row, col }) => ({
       ...piece, row, col, moved: false, dying: false, id: piece.id ?? newId(),
