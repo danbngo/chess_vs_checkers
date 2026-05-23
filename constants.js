@@ -15,9 +15,9 @@ const rctx = rightStrip.getContext('2d');
 
 // ─── Tuning ───────────────────────────────────────────────────────────────────
 const PIECE_COSTS    = {
-  pawn: 8, knight: 25, bishop: 25, rook: 40, queen: 70, king: 60,
-  amazon: 110, archbishop: 55, chancellor: 70, grasshopper: 22,
-  berolina_pawn: 10, camel: 18, nightrider: 38,
+  pawn: 6, knight: 18, bishop: 18, rook: 30, queen: 52, king: 45,
+  amazon: 82, archbishop: 41, chancellor: 52, grasshopper: 16,
+  berolina_pawn: 7, camel: 13, nightrider: 28,
 };
 const FLYING_KING_WAVE  = 5;
 const TRIPLE_KING_WAVE  = 8;
@@ -29,7 +29,7 @@ const CLR = {
   darkSquare:  '#b58863',
   highlight:   'rgba(0,200,100,0.45)',
   attackHL:    'rgba(50,120,220,0.55)',
-  illegalHL:   'rgba(220,50,50,0.45)',
+  illegalHL:   'rgba(40,40,40,0.55)',
   selected:    'rgba(50,150,255,0.5)',
 };
 

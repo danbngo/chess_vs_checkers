@@ -58,15 +58,32 @@ function getLegalMoves(piece) {
   }
 
   // Checkers campaign: standard check/check-avoidance logic
-  if (state.chessPieces.filter(p => p.type === 'king' && !p.dying).length >= 2) return raw;
-  return raw.filter(([mr, mc]) => {
-    let epCol;
-    if (piece.type==='pawn' && piece.row===3 && mc!==piece.col && !state.board[mr]?.[mc]) {
-      const adj = state.board[piece.row]?.[mc];
-      if (adj?.team==='checker' && state.enPassantCheckers.has(adj.id)) epCol = mc;
-    }
-    return !isKingInCheckAfterMove(piece, mr, mc, epCol);
-  });
+  let legal;
+  if (state.chessPieces.filter(p => p.type === 'king' && !p.dying).length >= 2) {
+    legal = raw;
+  } else {
+    legal = raw.filter(([mr, mc]) => {
+      let epCol;
+      if (piece.type==='pawn' && piece.row===3 && mc!==piece.col && !state.board[mr]?.[mc]) {
+        const adj = state.board[piece.row]?.[mc];
+        if (adj?.team==='checker' && state.enPassantCheckers.has(adj.id)) epCol = mc;
+      }
+      // Castling: king can't be in check and can't pass through a threatened square
+      if (piece.type === 'king' && mr === piece.row && Math.abs(mc - piece.col) === 2) {
+        if (isThreatenedByChecker(piece.row, piece.col, state.board)) return false;
+        const interCol = (mc + piece.col) / 2;
+        if (isThreatenedByChecker(mr, interCol, state.board)) return false;
+      }
+      return !isKingInCheckAfterMove(piece, mr, mc, epCol);
+    });
+  }
+
+  // Mother checker immunity: capturable only when she is the last checker alive
+  const otherCheckers = state.checkers.filter(c => !c.dying && !c.isMotherChecker);
+  if (otherCheckers.length > 0)
+    legal = legal.filter(([mr, mc]) => !state.board[mr]?.[mc]?.isMotherChecker);
+
+  return legal;
 }
 
 // ─── Checker moves ────────────────────────────────────────────────────────────
@@ -161,12 +178,12 @@ function rateMove(ck, move) {
   const canThreaten    = canCaptureFromPos(ck, move.row, move.col, tempBoard);
 
   const promotes = (!ck.isKing && move.row === ROWS - 1) ||
-                   (ck.isKing && !ck.isTripleKing && move.row === 0);
+                   (ck.isKing && !ck.isTripleKing && !ck.isFlyingKing && move.row === 0 && state.wave >= TRIPLE_KING_WAVE);
 
   if (!destSafe)               return 1;   // moves into range of a chess piece — avoid
   if (currentlyInDanger && canThreaten) return 60; // escape + can threaten from safety
-  if (currentlyInDanger)       return 30;  // escape from danger — beats passive moves
-  if (canThreaten)             return 50;  // safe square that also threatens a chess piece
+  if (currentlyInDanger)       return 50;  // escape from danger — beats attack positioning
+  if (canThreaten)             return 30;  // safe square that threatens a chess piece
   if (promotes)                return 20;  // promotion — beats passive, loses to escape/attack
   return 10;                               // safe but passive
 }
@@ -253,19 +270,34 @@ function animateSingleChecker(ck, mustCapture = false, preChosenMove = null) {
     if (capture)  applyCheckerCapture(capture);
     if (capture2) applyCheckerCapture(capture2);
     ck.row = chosen.row; ck.col = chosen.col;
+    let promoted = false;
     if (!ck.isKing && ck.row === ROWS-1) {
       ck.isKing = true;
-      ck.isFlyingKing = state.wave >= FLYING_KING_WAVE && state.checkers.some(c => c.isFlyingKing);
+      if (state.wave >= FLYING_KING_WAVE && Math.random() < 0.5) {
+        ck.isFlyingKing = true;
+      } else if (state.wave >= TRIPLE_KING_WAVE) {
+        ck.isTripleKing = true;
+      }
+      promoted = true;
     }
-    if (ck.isKing && !ck.isTripleKing && !ck.isFlyingKing && ck.row === 0) ck.isTripleKing = true;
+    if (ck.isKing && !ck.isTripleKing && !ck.isFlyingKing && ck.row === 0 && state.wave >= TRIPLE_KING_WAVE) ck.isTripleKing = true;
     if (ck.row === 3) state.enPassantCheckers.add(ck.id);
     syncBoard(); updateUI(); renderStrips();
 
-    if (capture) {
-      const nextCaps = getCheckerMoves(ck).filter(m => m.capture && !m.capture.dying);
-      if (nextCaps.length) { setTimeout(() => animateMultiJump(ck, checkerTurnDone), 150); return; }
+    const cont = () => {
+      if (capture) {
+        const nextCaps = getCheckerMoves(ck).filter(m => m.capture && !m.capture.dying);
+        if (nextCaps.length) { setTimeout(() => animateMultiJump(ck, checkerTurnDone), 150); return; }
+      }
+      checkerTurnDone();
+    };
+
+    if (promoted && !state.seenKingWarning) {
+      state.seenKingWarning = true;
+      showMessage('Checker King!', 'A checker promoted to King — kings move and capture diagonally in all four directions, including backwards!', cont);
+    } else {
+      cont();
     }
-    checkerTurnDone();
   });
 }
 
@@ -289,18 +321,61 @@ function animateMultiJump(ck, onDone) {
     applyCheckerCapture(capture);
     if (capture2) applyCheckerCapture(capture2);
     ck.row = chosen.row; ck.col = chosen.col;
+    let promoted = false;
     if (!ck.isKing && ck.row === ROWS-1) {
       ck.isKing = true;
-      ck.isFlyingKing = state.wave >= FLYING_KING_WAVE && state.checkers.some(c => c.isFlyingKing);
+      if (state.wave >= FLYING_KING_WAVE && Math.random() < 0.5) {
+        ck.isFlyingKing = true;
+      } else if (state.wave >= TRIPLE_KING_WAVE) {
+        ck.isTripleKing = true;
+      }
+      promoted = true;
     }
-    if (ck.isKing && !ck.isTripleKing && !ck.isFlyingKing && ck.row === 0) ck.isTripleKing = true;
+    if (ck.isKing && !ck.isTripleKing && !ck.isFlyingKing && ck.row === 0 && state.wave >= TRIPLE_KING_WAVE) ck.isTripleKing = true;
     if (ck.row === 3) state.enPassantCheckers.add(ck.id);
     syncBoard(); updateUI(); renderStrips();
 
-    const next = getCheckerMoves(ck).filter(m => m.capture && !m.capture.dying);
-    if (next.length) setTimeout(() => animateMultiJump(ck, onDone), 150);
-    else             setTimeout(onDone, 60);
+    const cont = () => {
+      const next = getCheckerMoves(ck).filter(m => m.capture && !m.capture.dying);
+      if (next.length) setTimeout(() => animateMultiJump(ck, onDone), 150);
+      else             setTimeout(onDone, 60);
+    };
+
+    if (promoted && !state.seenKingWarning) {
+      state.seenKingWarning = true;
+      showMessage('Checker King!', 'A checker promoted to King — kings move and capture diagonally in all four directions, including backwards!', cont);
+    } else {
+      cont();
+    }
   });
+}
+
+function motherSpawn() {
+  const mother = state.checkers.find(c => c.isMotherChecker && !c.dying);
+  if (!mother) return;
+  syncBoard();
+  const empty = [];
+  for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
+    const r = mother.row + dr, c = mother.col + dc;
+    if (r >= 0 && r < ROWS && c >= 0 && c < COLS && !state.board[r][c])
+      empty.push([r, c]);
+  }
+  if (!empty.length) return;
+  const [sr, sc] = empty[Math.floor(Math.random() * empty.length)];
+  let isKing = false, isFlyingKing = false, isTripleKing = false;
+  if (Math.random() < kingFraction(state.wave)) {
+    isKing = true;
+    if (state.wave >= FLYING_KING_WAVE && Math.random() < 0.5) isFlyingKing = true;
+    else if (state.wave >= TRIPLE_KING_WAVE)                    isTripleKing = true;
+  }
+  state.checkers.push({
+    type: 'checker', team: 'checker',
+    row: sr, col: sc,
+    isLight: Math.random() < 0.5,
+    isKing, isFlyingKing, isTripleKing,
+    isMotherChecker: false, dying: false, id: newId(),
+  });
+  syncBoard(); updateUI(); renderStrips();
 }
 
 function checkerTurnDone() {
@@ -308,6 +383,7 @@ function checkerTurnDone() {
     gameLost();
     return;
   }
+  motherSpawn();
   state.phase = 'player';
   syncBoard();
   const hasMove = state.chessPieces.filter(p => !p.dying).some(p => getLegalMoves(p).length > 0);

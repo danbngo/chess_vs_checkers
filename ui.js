@@ -1,8 +1,17 @@
-// ─── Shop tooltip ─────────────────────────────────────────────────────────────
-const TRAIT_DESCS = {
-  mercenary: 'Costs half price. After each capture, has a 1/3 chance to desert your army permanently.',
-  iron:      'Costs double. If captured, this piece returns to your army at the start of the next wave.',
-  raider:    'Costs 1.5× the base price. Earns $1 for every enemy it captures.',
+// ─── Trait definitions ────────────────────────────────────────────────────────
+const TRAITS = {
+  mercenary: {
+    name:        'Mercenary',
+    description: 'Costs half price. After each capture, has a 1/3 chance to desert your army permanently.',
+  },
+  iron: {
+    name:        'Iron',
+    description: 'Costs double. If captured, this piece returns to your army at the start of the next wave.',
+  },
+  raider: {
+    name:        'Raider',
+    description: 'Costs 1.5× the base price. Earns $3 for every enemy it captures.',
+  },
 };
 
 let _shopTip = null;
@@ -10,17 +19,23 @@ function getShopTip() {
   if (!_shopTip) { _shopTip = document.createElement('div'); _shopTip.id = 'shop-tip'; document.body.appendChild(_shopTip); }
   return _shopTip;
 }
-function showShopTip(e, text) { const t = getShopTip(); t.textContent = text; t.style.display = 'block'; posShopTip(e); }
-function moveShopTip(e)       { posShopTip(e); }
-function hideShopTip()        { getShopTip().style.display = 'none'; }
-function posShopTip(e) {
-  const t = getShopTip(), pad = 14;
-  let x = e.clientX + pad, y = e.clientY - t.offsetHeight / 2;
-  if (x + t.offsetWidth  > window.innerWidth)  x = e.clientX - t.offsetWidth - pad;
-  if (y < 4)                                    y = 4;
-  if (y + t.offsetHeight > window.innerHeight)  y = window.innerHeight - t.offsetHeight - 4;
+function showShopTip(e, text) {
+  const t = getShopTip();
+  t.textContent = text;
+  t.style.display = 'block';
+  // Anchor to the trigger element's bounding rect — no mouse coords needed
+  const tr  = e.currentTarget.getBoundingClientRect();
+  const th  = t.getBoundingClientRect().height;
+  const pad = 8, w = 220;
+  let x = tr.right + pad;
+  let y = tr.top + tr.height / 2 - th / 2;
+  if (x + w > window.innerWidth)  x = tr.left - w - pad;
+  if (y < 4)                       y = 4;
+  if (y + th > window.innerHeight) y = window.innerHeight - th - 4;
   t.style.left = x + 'px'; t.style.top = y + 'px';
 }
+function moveShopTip() {} // tooltip is anchored to element, not mouse
+function hideShopTip()  { getShopTip().style.display = 'none'; }
 
 // ─── HUD ──────────────────────────────────────────────────────────────────────
 function updateUI() {
@@ -50,7 +65,7 @@ function showMessage(title, body, onContinue) {
 
 // ─── Earnings & shop ──────────────────────────────────────────────────────────
 function calcEarnings(moveCount, checkerCount) {
-  return 5 + Math.max(0, 4 * checkerCount - moveCount);
+  return 5 + Math.max(0, 5 * checkerCount - moveCount);
 }
 
 function pickTrait(wave) {
@@ -123,7 +138,7 @@ function waveShopAdditions(wave) {
 
 function showShop(earned, nextWave) {
   state.dollars += earned;
-  state.shop.push(...waveShopAdditions(state.wave));
+  state.shop = waveShopAdditions(state.wave);
   state.phase = 'shop';
 
   document.getElementById('shop-title').textContent    = `Wave ${state.wave} Cleared!`;
@@ -140,19 +155,9 @@ function showShop(earned, nextWave) {
     const backFull  = liveNonPawns >= 8;
     const frontFull = livePawns    >= 8;
 
-    // Track counts for canonical position label (best-guess slot for each type)
-    const labelCounts = {};
-    state.chessPieces.filter(p => !p.dying).forEach(p => {
-      labelCounts[p.type] = (labelCounts[p.type] || 0) + 1;
-    });
-
     state.shop.forEach((item, i) => {
-      const full = isFrontRowType(item.type) ? frontFull : backFull;
-
-      const idx       = labelCounts[item.type] || 0;
-      labelCounts[item.type] = idx + 1;
-      const canonical = (CHESS_SLOTS[item.type] || [])[idx];
-      const pos       = canonical ? toChessNotation(canonical[0], canonical[1]) : null;
+      const full       = isFrontRowType(item.type) ? frontFull : backFull;
+      const cantAfford = state.dollars < item.cost;
 
       const div = document.createElement('div');
       div.className = 'shop-item';
@@ -173,7 +178,7 @@ function showShop(earned, nextWave) {
 
       const nm = document.createElement('span');
       nm.className = 'shop-item-name';
-      nm.textContent = pos ? `${pos.toUpperCase()} ${PIECE_DEFS[item.type].name}` : PIECE_DEFS[item.type].name;
+      nm.textContent = PIECE_DEFS[item.type].name;
       const desc = PIECE_DEFS[item.type]?.description;
       if (desc) {
         nm.addEventListener('mouseenter', e => showShopTip(e, desc));
@@ -191,8 +196,8 @@ function showShop(earned, nextWave) {
       if (item.trait) {
         const tr = document.createElement('span');
         tr.className = `shop-item-trait trait-${item.trait}`;
-        tr.textContent = item.trait === 'mercenary' ? 'Mercenary' : item.trait === 'iron' ? 'Iron' : 'Raider';
-        tr.addEventListener('mouseenter', e => showShopTip(e, TRAIT_DESCS[item.trait]));
+        tr.textContent = TRAITS[item.trait].name;
+        tr.addEventListener('mouseenter', e => showShopTip(e, TRAITS[item.trait].description));
         tr.addEventListener('mousemove',  e => moveShopTip(e));
         tr.addEventListener('mouseleave', hideShopTip);
         body.appendChild(tr);
@@ -202,10 +207,21 @@ function showShop(earned, nextWave) {
 
       const btn = document.createElement('button');
       btn.className = 'shop-buy-btn';
-      btn.textContent = full ? 'Full' : 'Buy';
-      btn.disabled    = full || state.dollars < item.cost;
+      btn.disabled  = full || cantAfford;
+      btn.textContent = 'Buy';
+
+      if (full) {
+        const row = isFrontRowType(item.type) ? 'front' : 'back';
+        btn.addEventListener('mouseenter', e => showShopTip(e, `Your ${row} row is full (8/8 pieces).`));
+        btn.addEventListener('mouseleave', hideShopTip);
+      } else if (cantAfford) {
+        const need = item.cost - state.dollars;
+        btn.addEventListener('mouseenter', e => showShopTip(e, `Need $${need} more to buy this.`));
+        btn.addEventListener('mouseleave', hideShopTip);
+      }
+
       btn.onclick = () => {
-        if (full || state.dollars < item.cost) return;
+        if (full || cantAfford) return;
         state.dollars -= item.cost;
         state.shop.splice(i, 1);
         state.chessPieces.push({ type: item.type, team: 'chess', id: newId(),
@@ -236,12 +252,12 @@ function showPromotion(piece, onChoice) {
     btn.className = 'piece-option-btn';
     btn.textContent = PIECE_DEFS[type].name;
     btn.onclick = () => {
-      document.getElementById('piece-select').classList.add('hidden');
+      document.getElementById('promo-overlay').classList.add('hidden');
       onChoice(type);
     };
     opts.appendChild(btn);
   }
-  document.getElementById('piece-select').classList.remove('hidden');
+  document.getElementById('promo-overlay').classList.remove('hidden');
 }
 
 // ─── Wave / game events ───────────────────────────────────────────────────────

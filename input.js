@@ -35,14 +35,24 @@ canvas.addEventListener('click', e => {
   const col  = Math.floor((e.clientX - rect.left) / CELL);
   const row  = Math.floor((e.clientY - rect.top)  / CELL);
 
-  if (state.selected) {
+  if (state.selected?.type === 'chess') {
     const { piece, moves } = state.selected;
     const hit = moves.find(([mr, mc]) => mr===row && mc===col);
     if (hit) { executeChessMove(piece, row, col); return; }
   }
   const clicked = state.board[row]?.[col];
   if (clicked?.team === 'chess') {
-    state.selected = { piece: clicked, moves: getLegalMoves(clicked) };
+    state.selected = { type: 'chess', piece: clicked, moves: getLegalMoves(clicked) };
+  } else if (clicked?.team === 'checker') {
+    state.selected = { type: 'checker', piece: clicked, moves: getCheckerMoves(clicked) };
+  } else if (clicked?.team === 'go') {
+    const group = getGroup(clicked.row, clicked.col, state.board, 'go');
+    const reach = findReachableSquares();
+    const enclosed = [];
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++)
+        if (!reach[r][c] && state.board[r][c]?.team !== 'go') enclosed.push([r, c]);
+    state.selected = { type: 'go', piece: clicked, group, enclosed };
   } else {
     state.selected = null;
   }
@@ -60,6 +70,15 @@ function executeChessMove(piece, toRow, toCol) {
     if (adj?.team === 'checker' && state.enPassantCheckers.has(adj.id)) epCapture = adj;
   }
 
+  // Castling: detect and prepare rook movement
+  let castleRook = null, castleRookToCol = -1;
+  if (piece.type === 'king' && fromRow === 7 && Math.abs(toCol - fromCol) === 2) {
+    const rookFromCol = toCol > fromCol ? 7 : 0;
+    castleRookToCol   = toCol > fromCol ? 5 : 3;
+    castleRook = state.board[7]?.[rookFromCol] ?? null;
+    if (castleRook) state.board[7][rookFromCol] = null;
+  }
+
   state.moveCount++;
   state.selected = null; state.phase = 'animating';
   if (state.campaign !== 'go') state.enPassantCheckers = new Set();
@@ -68,8 +87,10 @@ function executeChessMove(piece, toRow, toCol) {
   else if (target)    target.dying    = true;
   if (epCapture) epCapture.dying = true;
 
+  if (castleRook) startAnim(castleRook, 7, castleRookToCol, 280, () => {});
   startAnim(piece, toRow, toCol, 280, () => {
     piece.row = toRow; piece.col = toCol; piece.moved = true;
+    if (castleRook) { castleRook.col = castleRookToCol; castleRook.moved = true; }
 
     const finishMove = (wasPromotion) => {
       if (target?.team === 'go') {

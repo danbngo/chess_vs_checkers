@@ -13,6 +13,7 @@ for (const [key, src] of [
   ['checker_king',        'images/checker_king.png'],
   ['checker_flying_king', 'images/checker_flying_king.png'],
   ['checker_triple_king', 'images/checker_triple_king.png'],
+  ['checker_mother',      'images/checkers_mother.png'],
   ['amazon',        'images/amazon.png'],
   ['archbishop',    'images/archbishop.png'],
   ['chancellor',    'images/chancellor.png'],
@@ -127,14 +128,16 @@ function drawTooltip() {
       if (line) lines.push({ text: line.trim(), bold: false, color: '#ddd' });
     }
   } else if (piece.team === 'checker') {
-    const typeStr = piece.isTripleKing ? 'Triple King'
-                  : piece.isFlyingKing ? 'Flying King'
-                  : piece.isKing ? 'Checker King'
-                  : 'Checker';
-    const typeKey = piece.isTripleKing ? 'checker_triple_king'
-                  : piece.isFlyingKing ? 'checker_flying_king'
-                  : piece.isKing ? 'checker_king'
-                  : 'checker';
+    const typeStr = piece.isMotherChecker ? 'Mother Checker'
+                  : piece.isTripleKing   ? 'Triple King'
+                  : piece.isFlyingKing   ? 'Flying King'
+                  : piece.isKing         ? 'Checker King'
+                  :                        'Checker';
+    const typeKey = piece.isMotherChecker ? 'checker_mother'
+                  : piece.isTripleKing   ? 'checker_triple_king'
+                  : piece.isFlyingKing   ? 'checker_flying_king'
+                  : piece.isKing         ? 'checker_king'
+                  :                        'checker';
     lines = [
       { text: `${typeStr}  ${pos}`, bold: true, color: '#fff' },
       { text: 'Owner: Checkers', bold: false, color: '#ff8888' },
@@ -163,6 +166,7 @@ function drawTooltip() {
   if (!lines.length) return;
 
   ctx.save();
+  ctx.textAlign = 'left';
   ctx.font = '13px sans-serif';
   const lineH = 17, padX = 10, padY = 8;
   const maxW  = lines.reduce((m, l) => {
@@ -344,6 +348,7 @@ function render() {
   drawGoTerritoryOverlay();
   if (state.campaign !== 'go') drawCheckIndicator();
   drawHighlights();
+  drawThreatTints();
 
   for (const g of state.goPieces) drawGoPiece(g);
 
@@ -364,6 +369,7 @@ function drawBoard() {
       ctx.fillRect(c*CELL, r*CELL, CELL, CELL);
     }
 
+  ctx.save();
   ctx.font = 'bold 11px sans-serif';
   const onLight = 'rgba(100,60,20,0.7)';
   const onDark  = 'rgba(240,210,160,0.7)';
@@ -381,6 +387,7 @@ function drawBoard() {
     ctx.fillStyle = ((ROWS - 1 + c) % 2 === 0) ? onLight : onDark;
     ctx.fillText(String.fromCharCode(97 + c), (c + 1) * CELL - 3, ROWS * CELL - 2);
   }
+  ctx.restore();
 }
 
 function drawCheckIndicator() {
@@ -394,49 +401,100 @@ function drawCheckIndicator() {
   ctx.fillRect(king.col*CELL, king.row*CELL, CELL, CELL);
 }
 
+function drawThreatTints() {
+  if (state.campaign === 'go' || !state.board) return;
+  ctx.fillStyle = 'rgba(220,50,50,0.22)';
+  for (const p of state.chessPieces) {
+    if (p.dying) continue;
+    if (isThreatenedByChecker(p.row, p.col, state.board))
+      ctx.fillRect(p.col*CELL, p.row*CELL, CELL, CELL);
+  }
+  for (const c of state.checkers) {
+    if (c.dying) continue;
+    if (isAttackedByChess(c.row, c.col, state.board))
+      ctx.fillRect(c.col*CELL, c.row*CELL, CELL, CELL);
+  }
+}
+
 function drawHighlights() {
   if (!state.selected) return;
-  const { piece, moves } = state.selected;
-  ctx.fillStyle = CLR.selected;
-  ctx.fillRect(piece.col*CELL, piece.row*CELL, CELL, CELL);
+  const { type, piece } = state.selected;
 
-  // Red: geometrically reachable but blocked by check
-  const rawMoves = PIECE_DEFS[piece.type].getMoves(piece.row, piece.col, state.board);
-  const legalSet = new Set(moves.map(([r, c]) => r*COLS+c));
-  ctx.fillStyle = CLR.illegalHL;
-  for (const [mr, mc] of rawMoves)
-    if (!legalSet.has(mr*COLS+mc)) ctx.fillRect(mc*CELL, mr*CELL, CELL, CELL);
+  if (type === 'chess') {
+    const { moves } = state.selected;
+    ctx.fillStyle = CLR.selected;
+    ctx.fillRect(piece.col*CELL, piece.row*CELL, CELL, CELL);
 
-  // Blue: legal captures. Yellow: legal move but destination is under attack. Green: safe legal move.
-  for (const [mr, mc] of moves) {
-    const target = state.board[mr]?.[mc];
-    let isCapture = target?.team === 'checker' || target?.team === 'go';
-    const isEP = !isCapture && piece.type==='pawn' && piece.row===3 && mc!==piece.col && !target &&
-      state.enPassantCheckers.has(state.board[piece.row]?.[mc]?.id);
-    if (isEP) isCapture = true;
+    // Red: geometrically reachable but blocked by check
+    const rawMoves = PIECE_DEFS[piece.type].getMoves(piece.row, piece.col, state.board);
+    const legalSet = new Set(moves.map(([r, c]) => r*COLS+c));
+    ctx.fillStyle = CLR.illegalHL;
+    for (const [mr, mc] of rawMoves)
+      if (!legalSet.has(mr*COLS+mc)) ctx.fillRect(mc*CELL, mr*CELL, CELL, CELL);
 
-    let hlColor = CLR.highlight;
-    if (isCapture) {
-      hlColor = CLR.attackHL;
-    } else if (state.campaign !== 'go') {
-      // Simulate the board after this move to check if the destination would be threatened
-      const tempBoard = state.board.map(row => [...row]);
-      tempBoard[piece.row][piece.col] = null;
-      tempBoard[mr][mc] = { ...piece, row: mr, col: mc };
-      if (isThreatenedByChecker(mr, mc, tempBoard)) hlColor = 'rgba(255,210,0,0.55)';
-    }
-    ctx.fillStyle = hlColor;
-    ctx.fillRect(mc*CELL, mr*CELL, CELL, CELL);
+    // Blue: legal captures. Yellow: threatened destination. Green: safe move.
+    for (const [mr, mc] of moves) {
+      const target = state.board[mr]?.[mc];
+      let isCapture = target?.team === 'checker' || target?.team === 'go';
+      const isEP = !isCapture && piece.type==='pawn' && piece.row===3 && mc!==piece.col && !target &&
+        state.enPassantCheckers.has(state.board[piece.row]?.[mc]?.id);
+      if (isEP) isCapture = true;
 
-    if (isCapture) {
-      if (isEP) {
-        ctx.strokeStyle = 'rgba(80,140,255,0.8)'; ctx.lineWidth = 3; ctx.setLineDash([4,3]);
-        ctx.beginPath(); ctx.arc(mc*CELL+CELL/2, piece.row*CELL+CELL/2, CELL*0.38, 0, Math.PI*2);
-        ctx.stroke(); ctx.setLineDash([]);
+      let hlColor = CLR.highlight;
+      if (isCapture) {
+        hlColor = CLR.attackHL;
+      } else if (state.campaign !== 'go') {
+        const tempBoard = state.board.map(row => [...row]);
+        tempBoard[piece.row][piece.col] = null;
+        tempBoard[mr][mc] = { ...piece, row: mr, col: mc };
+        if (isThreatenedByChecker(mr, mc, tempBoard)) hlColor = 'rgba(220,50,50,0.55)';
       }
-    } else {
-      ctx.beginPath(); ctx.arc(mc*CELL+CELL/2, mr*CELL+CELL/2, 12, 0, Math.PI*2);
-      ctx.fillStyle = 'rgba(0,180,80,0.6)'; ctx.fill();
+      ctx.fillStyle = hlColor;
+      ctx.fillRect(mc*CELL, mr*CELL, CELL, CELL);
+
+      if (isCapture) {
+        if (isEP) {
+          ctx.strokeStyle = 'rgba(80,140,255,0.8)'; ctx.lineWidth = 3; ctx.setLineDash([4,3]);
+          ctx.beginPath(); ctx.arc(mc*CELL+CELL/2, piece.row*CELL+CELL/2, CELL*0.38, 0, Math.PI*2);
+          ctx.stroke(); ctx.setLineDash([]);
+        }
+      } else {
+        ctx.beginPath(); ctx.arc(mc*CELL+CELL/2, mr*CELL+CELL/2, 12, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(0,180,80,0.6)'; ctx.fill();
+      }
+    }
+
+  } else if (type === 'checker') {
+    const { moves } = state.selected;
+    ctx.fillStyle = CLR.selected;
+    ctx.fillRect(piece.col*CELL, piece.row*CELL, CELL, CELL);
+
+    for (const move of moves) {
+      if (move.capture) {
+        // Pieces that would be captured
+        ctx.fillStyle = 'rgba(220,50,50,0.55)';
+        ctx.fillRect(move.capture.col*CELL, move.capture.row*CELL, CELL, CELL);
+        if (move.capture2) ctx.fillRect(move.capture2.col*CELL, move.capture2.row*CELL, CELL, CELL);
+        // Landing square after capture
+        ctx.fillStyle = CLR.attackHL;
+        ctx.fillRect(move.col*CELL, move.row*CELL, CELL, CELL);
+      } else {
+        // Normal movement square
+        ctx.fillStyle = 'rgba(255,160,40,0.45)';
+        ctx.fillRect(move.col*CELL, move.row*CELL, CELL, CELL);
+      }
+    }
+
+  } else if (type === 'go') {
+    const { group, enclosed } = state.selected;
+    // Territory this group helps enclose
+    ctx.fillStyle = 'rgba(255,200,60,0.3)';
+    for (const [r, c] of enclosed)
+      ctx.fillRect(c*CELL, r*CELL, CELL, CELL);
+    // Connected group members
+    for (const [r, c] of group) {
+      ctx.fillStyle = (r === piece.row && c === piece.col) ? CLR.selected : 'rgba(50,180,255,0.4)';
+      ctx.fillRect(c*CELL, r*CELL, CELL, CELL);
     }
   }
 }
@@ -521,14 +579,15 @@ function drawChessPiece(p) {
 
 function drawChecker(c) {
   const { x, y } = getPieceRenderPos(c);
-  const imgKey = c.isTripleKing ? 'checker_triple_king'
-               : c.isFlyingKing ? 'checker_flying_king'
-               : c.isKing       ? 'checker_king'
-               :                  'checker';
+  const imgKey = c.isMotherChecker ? 'checker_mother'
+               : c.isTripleKing   ? 'checker_triple_king'
+               : c.isFlyingKing   ? 'checker_flying_king'
+               : c.isKing         ? 'checker_king'
+               :                    'checker';
   if (!imgReady(imgKey)) return;
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.5)';
-  ctx.shadowBlur  = activeAnims.has(c.id) ? 14 : 6;
+  ctx.shadowColor = c.isMotherChecker ? 'rgba(180,0,220,0.8)' : 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur  = c.isMotherChecker ? 18 : activeAnims.has(c.id) ? 14 : 6;
   drawPieceImage(imgKey, x, y, c.isLight ? TINT_CHECKER_LIGHT : TINT_CHECKER);
   ctx.restore();
 }

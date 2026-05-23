@@ -138,16 +138,26 @@ body {
 .load-btn { background: #0f3d22; border-color: #2dac6a; color: #a8f0c8; }
 .load-btn:hover:not(:disabled) { background: #1a6035; }
 
-/* ── Piece picker ─────────────────────────────────────────────────────────── */
-#piece-select {
-  background: #16213e;
-  border: 2px solid #0f3460;
-  border-radius: 8px;
-  padding: 14px;
-  margin: 8px 10px;
-  text-align: center;
+/* ── Pawn promotion overlay ───────────────────────────────────────────────── */
+#promo-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
 }
-#piece-select h3 { color: #e94560; margin-bottom: 10px; }
+#promo-box {
+  background: #16213e;
+  border: 3px solid #e94560;
+  border-radius: 12px;
+  padding: 30px 36px;
+  text-align: center;
+  max-width: 380px;
+}
+#promo-title { font-size: 2em; color: #e94560; margin-bottom: 10px; }
+#promo-body  { font-size: 1.1em; color: #a8dadc; margin-bottom: 22px; }
 
 #piece-options { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 
@@ -262,8 +272,15 @@ body {
 #title-sub {
   color: #7c9fc0;
   font-size: 1em;
-  margin-bottom: 36px;
+  margin-bottom: 6px;
   letter-spacing: 1px;
+}
+#title-credit {
+  color: #4a6a85;
+  font-size: 0.78em;
+  margin-bottom: 32px;
+  letter-spacing: 0.5px;
+  font-style: italic;
 }
 
 #campaign-list {
@@ -428,7 +445,7 @@ body {
   padding: 8px 12px;
   font-size: 0.82em;
   color: #ccd8f0;
-  max-width: 230px;
+  width: 220px;
   line-height: 1.55;
   text-align: left;
   pointer-events: none;

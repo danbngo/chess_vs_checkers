@@ -19,6 +19,8 @@ let state = {
   capturedByGo: [],
   capturedGoByChess: [],
   revivedPieces: [],
+  seenKingWarning: false,
+  seenLightWarning: false,
 };
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -59,12 +61,19 @@ function checkerStartPositions(count, allowLight) {
     return [...darkPri, ...darkOv].slice(0, count).map(pos => ({ pos, isLight: false }));
   }
 
-  // Equal split: half dark, half light (round up dark for odd counts)
-  const darkCount  = Math.ceil(count / 2);
-  const lightCount = count - darkCount;
-  const darkSlots  = [...darkPri,  ...darkOv ].slice(0, darkCount).map(pos => ({ pos, isLight: false }));
-  const lightSlots = [...lightPri, ...lightOv].slice(0, lightCount).map(pos => ({ pos, isLight: true  }));
-  return [...darkSlots, ...lightSlots];
+  // Each piece independently has 50% chance of being light (red).
+  // Shuffle the result so king/non-king index assignment gets a random mix.
+  const darkPool  = [...darkPri,  ...darkOv];
+  const lightPool = [...lightPri, ...lightOv];
+  let di = 0, li = 0;
+  const result = [];
+  for (let i = 0; i < count; i++) {
+    const goLight = (Math.random() < 0.5 && li < lightPool.length) || di >= darkPool.length;
+    if (goLight) result.push({ pos: lightPool[li++], isLight: true  });
+    else         result.push({ pos: darkPool[di++],  isLight: false });
+  }
+  fisherYates(result);
+  return result;
 }
 
 // ─── Placement ────────────────────────────────────────────────────────────────
@@ -147,9 +156,41 @@ function startWave(wave, chessPieces) {
   state.waveCheckerCount = state.checkers.length;
   syncBoard(); updateUI(); renderStrips();
 
+  // Mother Checker: boss of the final wave, placed at row 0 near center
+  if (wave === MAX_WAVE) {
+    const centerCols = [3, 4, 2, 5, 1, 6, 0, 7];
+    let mRow = -1, mCol = -1;
+    outer: for (let r = 0; r <= 1; r++)
+      for (const col of centerCols)
+        if (!state.board[r][col]) { mRow = r; mCol = col; break outer; }
+    if (mRow >= 0) {
+      state.checkers.push({
+        type: 'checker', team: 'checker',
+        row: mRow, col: mCol,
+        isLight: Math.random() < 0.5,
+        isKing: false, isFlyingKing: false, isTripleKing: false,
+        isMotherChecker: true, dying: false, id: newId(),
+      });
+      state.waveCheckerCount++;
+      syncBoard(); updateUI(); renderStrips();
+    }
+    showMessage('Mother Checker!',
+      'The Mother Checker commands the final wave. She spawns a new checker every turn and cannot be captured until all other checkers are defeated!', () => {});
+  }
+
+  if (allowLight && !state.seenLightWarning) {
+    state.seenLightWarning = true;
+    showMessage('Red Checkers!',
+      'Some checkers now start on white squares. Red checkers move on the opposite diagonal — watch both colors!', () => {});
+  }
+  if (!state.seenKingWarning && state.checkers.some(c => c.isKing)) {
+    state.seenKingWarning = true;
+    showMessage('Checker Kings!',
+      'The checker army now fields Kings. Kings move and capture diagonally in all four directions — including backwards!', () => {});
+  }
   if (wave === FLYING_KING_WAVE) {
     showMessage('Flying Kings!',
-      'Some checker kings can now slide diagonally any distance. Promoted kings inherit this ability if any flying king is still alive.', () => {});
+      'Some checker kings can now slide diagonally any distance — like a bishop. Their numbers grow each wave. When a checker promotes, it has a 50% chance of becoming a Flying King.', () => {});
   }
   if (wave === TRIPLE_KING_WAVE) {
     showMessage('Double Kings!',

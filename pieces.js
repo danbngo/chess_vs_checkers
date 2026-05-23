@@ -72,13 +72,25 @@ const PIECE_DEFS = {
   },
   king: {
     name: 'King', symbol: 'K', value: 0,
-    description: 'Moves one square in any direction. With only one king, losing it ends the game instantly. With two or more kings, check rules are suspended.',
+    description: 'Moves one square in any direction. With only one king, losing it ends the game instantly. With two or more kings, check rules are suspended. Can castle with an unmoved rook in its canonical starting position.',
     getMoves(r, c, board) {
       const moves = [];
       for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
         const nr = r+dr, nc = c+dc;
         if (nr>=0 && nr<ROWS && nc>=0 && nc<COLS && board[nr][nc]?.team!=='chess')
           moves.push([nr, nc]);
+      }
+      // Castling: king unmoved at canonical square [7,4]
+      const king = board[r]?.[c];
+      if (king && !king.moved && r === 7 && c === 4) {
+        const rkK = board[7]?.[7];
+        if (rkK?.type === 'rook' && rkK?.team === 'chess' && !rkK.moved &&
+            !board[7][5] && !board[7][6])
+          moves.push([7, 6]); // kingside
+        const rkQ = board[7]?.[0];
+        if (rkQ?.type === 'rook' && rkQ?.team === 'chess' && !rkQ.moved &&
+            !board[7][1] && !board[7][2] && !board[7][3])
+          moves.push([7, 2]); // queenside
       }
       return moves;
     }
@@ -225,6 +237,7 @@ const CHECKER_DESCS = {
   checker_king: 'A promoted checker that can move diagonally in all directions (forwards and backwards). Gains the ability to capture in any diagonal direction.',
   checker_flying_king: 'A rare flying king (from wave 5+). Slides multiple squares diagonally like a bishop, allowing long-range attacks and evasion.',
   checker_triple_king: 'A king that returned to its starting row. Can capture two consecutive enemy pieces in one jump and hop over allied pieces.',
+  checker_mother: 'The Mother Checker — boss of the final wave. Spawns a new checker each turn. Immune to capture until all other checkers are defeated.',
 };
 
 // ─── Wave config ──────────────────────────────────────────────────────────────
@@ -259,5 +272,5 @@ function flyingKingFraction(wave) {
 // Fraction of kings that are triple/double kings (25% at wave 8, 50% at wave 10).
 function tripleKingFraction(wave) {
   if (wave < TRIPLE_KING_WAVE) return 0;
-  return Math.min(0.5, 0.25 + (wave - TRIPLE_KING_WAVE) / 2 * 0.25);
+  return 1 - flyingKingFraction(wave); // all non-flying kings spawn as triple kings
 }
