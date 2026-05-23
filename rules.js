@@ -121,62 +121,53 @@ function getCheckerMoves(ck) {
 }
 
 // ─── Checker AI ───────────────────────────────────────────────────────────
+// Returns true if any chess piece can move to (row, col) on the given board.
+function isAttackedByChess(row, col, board) {
+  for (const p of state.chessPieces) {
+    if (p.dying) continue;
+    if (PIECE_DEFS[p.type].getMoves(p.row, p.col, board).some(([mr, mc]) => mr === row && mc === col))
+      return true;
+  }
+  return false;
+}
+
+// Returns true if a checker at (r, c) can capture any chess piece on the given board.
+function canCaptureFromPos(ck, r, c, board) {
+  const dirs = ck.isKing ? [[-1,-1],[-1,1],[1,-1],[1,1]] : [[1,-1],[1,1]];
+  for (const [dr, dc] of dirs) {
+    const nr = r+dr, nc = c+dc;
+    if (nr<0||nr>=ROWS||nc<0||nc>=COLS) continue;
+    const t = board[nr][nc];
+    if (t?.team !== 'chess') continue;
+    const lr = nr+dr, lc = nc+dc;
+    if (lr>=0&&lr<ROWS&&lc>=0&&lc<COLS&&!board[lr][lc]) return true;
+  }
+  return false;
+}
+
 function rateMove(ck, move) {
-  let score = 0;
-
   if (move.capture) {
-    // Captures are rated highest
-    if (move.capture.type === 'king') {
-      score = 1000; // King capture is the best
-    } else {
-      score = 100;  // Any other capture
-    }
-    // Bonus for additional captures (double captures)
-    if (move.capture2) {
-      if (move.capture2.type === 'king') {
-        score += 500; // Double-capturing king is excellent
-      } else {
-        score += 50;  // Double capture bonus
-      }
-    }
-  } else {
-    // Non-capture move scoring
-    // Create temp board after this move to evaluate the position
-    const tempBoard = state.board.map(row => [...row]);
-    tempBoard[ck.row][ck.col] = null;
-    tempBoard[move.row][move.col] = { ...ck, row: move.row, col: move.col };
-
-    // Check if destination would threaten any chess pieces (could capture next turn)
-    const threatsFromDest = [];
-    for (const [dr, dc] of ck.isKing ? [[-1,-1],[-1,1],[1,-1],[1,1]] : [[1,-1],[1,1]]) {
-      const nr = move.row + dr, nc = move.col + dc;
-      if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) continue;
-      const t = tempBoard[nr][nc];
-      if (!t || t.team !== 'chess') continue;
-      const lr = nr + dr, lc = nc + dc;
-      if (lr >= 0 && lr < ROWS && lc >= 0 && lc < COLS && !tempBoard[lr][lc]) {
-        threatsFromDest.push(t);
-      }
-    }
-
-    // Check if destination is threatened by any chess piece
-    const isThreatened = isThreatenedByChecker(move.row, move.col, tempBoard);
-
-    if (threatsFromDest.length > 0) {
-      // Can threaten a piece from this position
-      if (isThreatened) {
-        score = 5;  // Threatens but also threatened (risky)
-      } else {
-        score = 50; // Threatens and safe (good position)
-      }
-    } else if (isThreatened) {
-      score = 1; // Exposed to attack (bad)
-    } else {
-      score = 10; // Safe but passive
-    }
+    let score = move.capture.type === 'king' ? 1000 : 100;
+    if (move.capture2) score += move.capture2.type === 'king' ? 500 : 50;
+    return score;
   }
 
-  return score;
+  const tempBoard = state.board.map(row => [...row]);
+  tempBoard[ck.row][ck.col] = null;
+  tempBoard[move.row][move.col] = { ...ck, row: move.row, col: move.col };
+
+  const destSafe       = !isAttackedByChess(move.row, move.col, tempBoard);
+  const currentlyInDanger = isAttackedByChess(ck.row, ck.col, state.board);
+  const canThreaten    = canCaptureFromPos(ck, move.row, move.col, tempBoard);
+
+  const promotes = !ck.isKing && move.row === ROWS - 1;
+
+  if (!destSafe)               return 1;   // moves into range of a chess piece — avoid
+  if (currentlyInDanger && canThreaten) return 60; // escape + can threaten from safety
+  if (currentlyInDanger)       return 30;  // escape from danger — beats passive moves
+  if (canThreaten)             return 50;  // safe square that also threatens a chess piece
+  if (promotes)                return 20;  // promotion — beats passive, loses to escape/attack
+  return 10;                               // safe but passive
 }
 
 // ─── Checker AI ───────────────────────────────────────────────────────────────
@@ -199,9 +190,23 @@ function runCheckerTurn() {
   }
 
   const capturers = alive.filter(ck => getCheckerMoves(ck).some(m => m.capture && !m.capture.dying));
-  const pool = capturers.length > 0 ? capturers : alive;
-  const ck   = pool[Math.floor(Math.random() * pool.length)];
-  animateSingleChecker(ck, capturers.length > 0);
+  if (capturers.length > 0) {
+    const ck = capturers[Math.floor(Math.random() * capturers.length)];
+    animateSingleChecker(ck, true);
+    return;
+  }
+
+  // No captures: score every (checker, move) pair and pick the globally best option
+  let bestScore = -Infinity, bestOptions = [];
+  for (const ck of alive) {
+    for (const move of getCheckerMoves(ck)) {
+      const score = rateMove(ck, move);
+      if (score > bestScore)      { bestScore = score; bestOptions = [{ ck, move }]; }
+      else if (score === bestScore) bestOptions.push({ ck, move });
+    }
+  }
+  const { ck, move } = bestOptions[Math.floor(Math.random() * bestOptions.length)];
+  animateSingleChecker(ck, false, move);
 }
 
 function applyCheckerCapture(capture) {
@@ -213,26 +218,25 @@ function applyCheckerCapture(capture) {
   state.chessPieces = state.chessPieces.filter(p => p.id !== capture.id);
 }
 
-function animateSingleChecker(ck, mustCapture = false) {
+function animateSingleChecker(ck, mustCapture = false, preChosenMove = null) {
   syncBoard();
   const moves    = getCheckerMoves(ck);
   const captures = moves.filter(m => m.capture && !m.capture.dying);
 
-  // Filter pool based on mustCapture rule
-  let pool = moves;
-  if (mustCapture && captures.length > 0) {
-    pool = captures;
-  } else if (mustCapture) {
-    // Must capture but no captures available - end turn
-    checkerTurnDone();
-    return;
+  let chosen = preChosenMove;
+  if (!chosen) {
+    let pool = moves;
+    if (mustCapture && captures.length > 0) {
+      pool = captures;
+    } else if (mustCapture) {
+      checkerTurnDone();
+      return;
+    }
+    const rated = pool.map(m => ({ move: m, score: rateMove(ck, m) }));
+    const maxScore = Math.max(...rated.map(r => r.score));
+    const bestMoves = rated.filter(r => r.score === maxScore);
+    chosen = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
   }
-
-  // Rate all moves in pool and pick the best-rated one(s)
-  const rated = pool.map(m => ({ move: m, score: rateMove(ck, m) }));
-  const maxScore = Math.max(...rated.map(r => r.score));
-  const bestMoves = rated.filter(r => r.score === maxScore);
-  const chosen = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
 
   if (!chosen) { checkerTurnDone(); return; }
 

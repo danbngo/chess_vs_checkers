@@ -151,5 +151,6 @@ function initialChessPieces() {
     { type: 'pawn', team: 'chess' },
     { type: 'king', team: 'chess' },
     { type: 'pawn', team: 'chess' },
+    { type: 'pawn', team: 'chess' },
   ];
 }

@@ -104,8 +104,12 @@ function executeChessMove(piece, toRow, toCol) {
       if (allEnemiesDead) {
         waveWon();
       } else if (state.campaign === 'go') {
-        state.phase = 'go_move';
-        setTimeout(runGoTurn, 350);
+        if (state.moveCount % 2 === 1) {
+          state.phase = 'go_move';
+          setTimeout(runGoTurn, 350);
+        } else {
+          goTurnDone();
+        }
       } else {
         state.phase = 'checker_move';
         setTimeout(runCheckerTurn, 350);

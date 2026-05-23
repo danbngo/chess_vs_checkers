@@ -1,3 +1,50 @@
+// ─── Shop icon rendering ──────────────────────────────────────────────────────
+function drawShopIcon(iconCanvas, type, trait) {
+  const ictx = iconCanvas.getContext('2d');
+  const sz   = iconCanvas.width;
+  ictx.clearRect(0, 0, sz, sz);
+  const vr     = VARIANT_RENDER[type];
+  const imgKey = vr && !imgReady(type) ? vr.fallback : type;
+  const tint   = vr ? vr.tint : TINT_CHESS;
+  if (!imgReady(imgKey)) return;
+  const img   = IMAGES[imgKey];
+  const pad   = 5, maxD = sz - pad * 2;
+  const ratio = img.naturalWidth / img.naturalHeight;
+  const w  = ratio >= 1 ? maxD : maxD * ratio;
+  const h  = ratio >= 1 ? maxD / ratio : maxD;
+  const dx = sz / 2 - w / 2, dy = sz / 2 - h / 2;
+  if (trait && TRAIT_OUTLINE[trait]) {
+    const ol = getTinted(imgKey, TRAIT_OUTLINE[trait]);
+    if (ol) for (const [ox, oy] of [[-1,-1],[-1,1],[1,-1],[1,1]])
+      ictx.drawImage(ol, dx + ox, dy + oy, w, h);
+  }
+  ictx.drawImage(getTinted(imgKey, tint) || img, dx, dy, w, h);
+}
+
+// ─── Shop tooltip ─────────────────────────────────────────────────────────────
+const TRAIT_DESCS = {
+  mercenary: 'Costs half price. After each capture, has a 1/3 chance to desert your army permanently.',
+  iron:      'Costs double. If captured, this piece returns to your army at the start of the next wave.',
+  raider:    'Costs 1.5× the base price. Earns $1 for every enemy it captures.',
+};
+
+let _shopTip = null;
+function getShopTip() {
+  if (!_shopTip) { _shopTip = document.createElement('div'); _shopTip.id = 'shop-tip'; document.body.appendChild(_shopTip); }
+  return _shopTip;
+}
+function showShopTip(e, text) { const t = getShopTip(); t.textContent = text; t.style.display = 'block'; posShopTip(e); }
+function moveShopTip(e)       { posShopTip(e); }
+function hideShopTip()        { getShopTip().style.display = 'none'; }
+function posShopTip(e) {
+  const t = getShopTip(), pad = 14;
+  let x = e.clientX + pad, y = e.clientY - t.offsetHeight / 2;
+  if (x + t.offsetWidth  > window.innerWidth)  x = e.clientX - t.offsetWidth - pad;
+  if (y < 4)                                    y = 4;
+  if (y + t.offsetHeight > window.innerHeight)  y = window.innerHeight - t.offsetHeight - 4;
+  t.style.left = x + 'px'; t.style.top = y + 'px';
+}
+
 // ─── HUD ──────────────────────────────────────────────────────────────────────
 function updateUI() {
   document.getElementById('wave-label').textContent  = `Wave ${state.wave}`;
@@ -26,12 +73,7 @@ function showMessage(title, body, onContinue) {
 
 // ─── Earnings & shop ──────────────────────────────────────────────────────────
 function calcEarnings(moveCount, checkerCount) {
-  const max   = Math.max(10, checkerCount * 12);
-  const ratio = moveCount / Math.max(1, checkerCount);
-  if (ratio <= 2) return max;
-  if (ratio >= 5) return 1;
-  const t = (ratio - 2) / 3;
-  return Math.max(1, Math.round(max - t * (max-1)));
+  return 5 + Math.max(0, (10 + 3 * checkerCount) - moveCount);
 }
 
 function pickTrait(wave) {
@@ -137,28 +179,52 @@ function showShop(earned, nextWave) {
 
       const div = document.createElement('div');
       div.className = 'shop-item';
-      const nm  = document.createElement('div'); nm.className  = 'shop-item-name';
-      nm.textContent = pos ? `${pos.toUpperCase()} ${PIECE_DEFS[item.type].name}` : PIECE_DEFS[item.type].name;
-      div.appendChild(nm);
 
-      if (PIECE_DEFS[item.type].description) {
-        const desc = document.createElement('div');
-        desc.className = 'shop-item-desc';
-        desc.textContent = PIECE_DEFS[item.type].description;
-        div.appendChild(desc);
+      // Piece icon canvas
+      const icon = document.createElement('canvas');
+      icon.className = 'shop-item-icon';
+      icon.width = 44; icon.height = 44;
+      drawShopIcon(icon, item.type, item.trait ?? null);
+      div.appendChild(icon);
+
+      // Info body
+      const body = document.createElement('div');
+      body.className = 'shop-item-body';
+
+      const hdr = document.createElement('div');
+      hdr.className = 'shop-item-header';
+
+      const nm = document.createElement('span');
+      nm.className = 'shop-item-name';
+      nm.textContent = pos ? `${pos.toUpperCase()} ${PIECE_DEFS[item.type].name}` : PIECE_DEFS[item.type].name;
+      const desc = PIECE_DEFS[item.type]?.description;
+      if (desc) {
+        nm.addEventListener('mouseenter', e => showShopTip(e, desc));
+        nm.addEventListener('mousemove',  e => moveShopTip(e));
+        nm.addEventListener('mouseleave', hideShopTip);
       }
+
+      const cs = document.createElement('span');
+      cs.className = 'shop-item-cost';
+      cs.textContent = `$${item.cost}`;
+
+      hdr.append(nm, cs);
+      body.appendChild(hdr);
 
       if (item.trait) {
-        const tr = document.createElement('div');
+        const tr = document.createElement('span');
         tr.className = `shop-item-trait trait-${item.trait}`;
-        tr.textContent = item.trait === 'mercenary' ? 'Mercenary'
-                       : item.trait === 'iron'       ? 'Iron'
-                       : 'Raider';
-        div.appendChild(tr);
+        tr.textContent = item.trait === 'mercenary' ? 'Mercenary' : item.trait === 'iron' ? 'Iron' : 'Raider';
+        tr.addEventListener('mouseenter', e => showShopTip(e, TRAIT_DESCS[item.trait]));
+        tr.addEventListener('mousemove',  e => moveShopTip(e));
+        tr.addEventListener('mouseleave', hideShopTip);
+        body.appendChild(tr);
       }
-      const cs  = document.createElement('div'); cs.className  = 'shop-item-cost';
-      cs.textContent = `$${item.cost}`;
-      const btn = document.createElement('button'); btn.className = 'shop-buy-btn';
+
+      div.appendChild(body);
+
+      const btn = document.createElement('button');
+      btn.className = 'shop-buy-btn';
       btn.textContent = full ? 'Full' : 'Buy';
       btn.disabled    = full || state.dollars < item.cost;
       btn.onclick = () => {
@@ -169,7 +235,7 @@ function showShop(earned, nextWave) {
           dying: false, moved: false, row: 0, col: 0, trait: item.trait ?? null });
         refresh();
       };
-      div.append(cs, btn);
+      div.appendChild(btn);
       container.appendChild(div);
     });
   };

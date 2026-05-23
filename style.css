@@ -346,11 +346,10 @@ body {
 
 #shop-items {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: center;
+  flex-direction: column;
+  gap: 7px;
   margin-bottom: 20px;
-  max-height: 270px;
+  max-height: 380px;
   overflow-y: auto;
 }
 
@@ -358,31 +357,83 @@ body {
   background: #0f3460;
   border: 2px solid #2d6aac;
   border-radius: 8px;
-  padding: 10px 14px;
-  min-width: 88px;
-  text-align: center;
+  padding: 7px 10px 7px 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.shop-item-name { font-size: 0.95em; color: #e0e0e0; margin-bottom: 2px; }
-.shop-item-desc { font-size: 0.75em; color: #b0b0b0; margin-bottom: 6px; line-height: 1.3; }
-.shop-item-trait { font-size: 0.72em; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
+.shop-item-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: #091e3a;
+}
+
+.shop-item-body { flex: 1; min-width: 0; }
+
+.shop-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.shop-item-name {
+  font-size: 0.93em;
+  color: #e0e0e0;
+  cursor: help;
+  border-bottom: 1px dotted rgba(180,180,255,0.3);
+}
+.shop-item-name:hover { color: #a8dadc; }
+
+.shop-item-cost { font-size: 0.85em; color: #ffd700; white-space: nowrap; }
+
+.shop-item-trait {
+  font-size: 0.72em;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-top: 3px;
+  display: inline-block;
+  cursor: help;
+  border-bottom: 1px dotted;
+}
 .trait-mercenary { color: #ffd700; }
 .trait-iron      { color: #82d2ff; }
 .trait-raider    { color: #ff7a30; }
-.shop-item-cost { font-size: 0.85em; color: #ffd700; margin-bottom: 8px; }
 
 .shop-buy-btn {
   background: #0f3d22;
   border: 1px solid #2dac6a;
   border-radius: 5px;
   color: #a8f0c8;
-  padding: 4px 12px;
+  padding: 5px 13px;
   cursor: pointer;
   font-size: 0.82em;
+  flex-shrink: 0;
   transition: background 0.15s;
 }
 .shop-buy-btn:disabled { opacity: 0.35; cursor: default; }
 .shop-buy-btn:hover:not(:disabled) { background: #1a6035; }
+
+/* ── Shop tooltip ─────────────────────────────────────────────────────────── */
+#shop-tip {
+  position: fixed;
+  z-index: 500;
+  background: rgba(10,16,32,0.97);
+  border: 1px solid rgba(100,150,255,0.4);
+  border-radius: 7px;
+  padding: 8px 12px;
+  font-size: 0.82em;
+  color: #ccd8f0;
+  max-width: 230px;
+  line-height: 1.55;
+  pointer-events: none;
+  display: none;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.65);
+}
 
 #shop-continue {
   background: #e94560;
