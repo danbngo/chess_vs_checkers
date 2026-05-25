@@ -269,8 +269,9 @@ body {
   inset: 0;
   background: #0d0d1a;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  overflow-y: auto;
   z-index: 200;
 }
 
@@ -278,6 +279,8 @@ body {
   text-align: center;
   max-width: 600px;
   width: 92%;
+  margin: auto;
+  padding: 32px 0;
 }
 
 #title-heading {
@@ -306,7 +309,7 @@ body {
   height: 216px;
   border-radius: 50%;
   object-fit: cover;
-  object-position: 40% top;
+  object-position: 25% top;
   border: 2px solid #0f3460;
   box-shadow: 0 0 10px rgba(233,69,96,0.35);
 }
@@ -531,3 +534,48 @@ body {
 #shop-continue:hover { background: #c73652; }
 
 .hidden { display: none !important; }
+
+/* ── Mobile ───────────────────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  /* Board area scrolls horizontally rather than the whole page overflowing */
+  #board-area {
+    overflow-x: auto;
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  /* Prevent double-tap zoom on the canvas */
+  #game-canvas { touch-action: manipulation; }
+
+  /* Hide the instructions sidebar — not useful on mobile */
+  #sidebar { display: none; }
+
+  /* Slimmer header */
+  #header { padding: 7px 12px; }
+  #wave-label  { font-size: 1.05em; }
+  #moves-label { font-size: 0.8em; }
+  #score-label { font-size: 1em; }
+  #potential-label { font-size: 0.78em; }
+
+  /* Title screen */
+  #title-box { padding: 20px 0; }
+  #title-heading { font-size: 1.9em; margin-bottom: 4px; }
+  #title-sub { font-size: 0.88em; margin-bottom: 4px; }
+  #title-credit-row { gap: 14px; margin-bottom: 16px; }
+  #vincent-img { width: 72px; height: 72px; }
+  #title-credit { font-size: 0.95em; }
+  #difficulty-row { flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  #campaign-list { gap: 12px; margin-bottom: 20px; }
+  .campaign-card { width: 100%; max-width: 300px; padding: 14px 18px; }
+  .campaign-desc { min-height: unset; margin-bottom: 12px; }
+  #title-saves { padding-top: 14px; }
+  #title-save-slots { gap: 8px; }
+
+  /* Overlays: scrollable and don't overflow viewport */
+  #shop-box, #menu-box, #message-box, #promo-box {
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 20px 16px;
+  }
+  #shop-box { width: 96%; }
+}
