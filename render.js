@@ -225,6 +225,39 @@ function drawTooltip() {
 
 // ─── Move annotation ──────────────────────────────────────────────────────────
 let moveAnnotation = null;
+let eventAnnotation = null;
+
+function showEventAnnotation(label, sublabel, col, row, color, bg) {
+  eventAnnotation = { label, sublabel, color, bg,
+    x: col * CELL + CELL / 2, y: row * CELL + 6, startTime: performance.now() };
+}
+
+function drawEventAnnotation() {
+  if (!eventAnnotation) return;
+  const t = (performance.now() - eventAnnotation.startTime) / 2400;
+  if (t >= 1) { eventAnnotation = null; return; }
+  const alpha = t < 0.65 ? 1 : 1 - (t - 0.65) / 0.35;
+  const yOff  = -t * 40;
+  const { label, sublabel, color, bg, x, y } = eventAnnotation;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  const tw = ctx.measureText(label).width, px = 10, py = 6;
+  const bx = x - tw / 2 - px, by = y + yOff - 24 - py, bw = tw + px * 2, bh = 24 + py * 2, rad = 6;
+  ctx.fillStyle = bg;
+  ctx.beginPath();
+  ctx.moveTo(bx + rad, by);       ctx.lineTo(bx + bw - rad, by);        ctx.arcTo(bx + bw, by,       bx + bw, by + rad,    rad);
+  ctx.lineTo(bx + bw, by + bh - rad); ctx.arcTo(bx + bw, by + bh, bx + bw - rad, by + bh, rad);
+  ctx.lineTo(bx + rad, by + bh);      ctx.arcTo(bx,       by + bh, bx,       by + bh - rad, rad);
+  ctx.lineTo(bx, by + rad);           ctx.arcTo(bx,       by,      bx + rad, by,             rad);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = color;
+  ctx.fillText(label, x, y + yOff);
+  ctx.font = '11px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.textBaseline = 'top';
+  ctx.fillText(sublabel, x, y + yOff + 2);
+  ctx.restore();
+}
 
 const ANNOTATION = {
   '!!': { label: 'Brilliant!',  color: '#00ee66', bg: 'rgba(0,60,20,0.92)'  },
@@ -382,6 +415,7 @@ function render() {
   for (const c of state.checkers)    if ( animIds.has(c.id)) drawChecker(c);
 
   drawAnnotation();
+  drawEventAnnotation();
   drawTooltip();
 }
 

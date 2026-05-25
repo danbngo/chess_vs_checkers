@@ -79,6 +79,20 @@ body {
   gap: 8px;
 }
 
+#menu-restart {
+  background: #1a1a2e;
+  border: 1px solid #7a2030;
+  color: #e07080;
+  border-radius: 6px;
+  padding: 8px 18px;
+  font-size: 0.9em;
+  cursor: pointer;
+  width: 100%;
+  margin-bottom: 6px;
+  transition: background 0.2s, color 0.2s;
+}
+#menu-restart:hover { background: #5a1525; color: #ffb0bb; }
+
 #menu-exit-title {
   background: #1a1a2e;
   border: 1px solid #3d6090;
@@ -279,13 +293,60 @@ body {
   margin-bottom: 6px;
   letter-spacing: 1px;
 }
+#title-credit-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 42px;
+  margin-bottom: 28px;
+}
+
+#vincent-img {
+  width: 216px;
+  height: 216px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: 40% top;
+  border: 2px solid #0f3460;
+  box-shadow: 0 0 10px rgba(233,69,96,0.35);
+}
+
 #title-credit {
   color: #4a6a85;
-  font-size: 0.78em;
-  margin-bottom: 32px;
+  font-size: 2.34em;
+  margin: 0;
   letter-spacing: 0.5px;
   font-style: italic;
+  text-align: left;
+  line-height: 1.6;
 }
+
+#difficulty-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+#difficulty-label {
+  color: #7c9fc0;
+  font-size: 0.9em;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+}
+#difficulty-btns { display: flex; gap: 6px; }
+.diff-btn {
+  background: #16213e;
+  border: 2px solid #0f3460;
+  color: #7c9fc0;
+  border-radius: 6px;
+  padding: 5px 14px;
+  font-size: 0.85em;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.diff-btn:hover { border-color: #e94560; color: #e0e0e0; }
+.diff-btn.active { background: #e94560; border-color: #e94560; color: #fff; font-weight: bold; }
 
 #campaign-list {
   display: flex;

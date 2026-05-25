@@ -18,6 +18,7 @@
       <div id="menu-box">
         <h2 id="menu-title">Menu</h2>
         <div id="menu-slots"></div>
+        <button id="menu-restart">Restart Campaign</button>
         <button id="menu-exit-title">Exit to Title Screen</button>
         <button id="menu-close">Close</button>
       </div>
@@ -35,7 +36,19 @@
       <div id="title-box">
         <h1 id="title-heading">Chess vs Checkers</h1>
         <p id="title-sub">A campaign strategy game</p>
-        <p id="title-credit">By Vincent Ngo, with his dad &amp; Claude</p>
+        <div id="title-credit-row">
+          <img id="vincent-img" src="images/vincent_ngo.png" alt="Vincent Ngo">
+          <p id="title-credit">By Vincent Ngo,<br>with his dad &amp; Claude</p>
+        </div>
+        <div id="difficulty-row">
+          <span id="difficulty-label">Difficulty:</span>
+          <div id="difficulty-btns">
+            <button class="diff-btn" data-diff="easy">Easy</button>
+            <button class="diff-btn" data-diff="medium">Medium</button>
+            <button class="diff-btn active" data-diff="hard">Hard</button>
+            <button class="diff-btn" data-diff="pro">Pro</button>
+          </div>
+        </div>
         <div id="campaign-list">
           <div class="campaign-card" id="campaign-1">
             <div class="campaign-num">Campaign 1</div>

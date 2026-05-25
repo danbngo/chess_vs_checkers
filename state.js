@@ -1,6 +1,7 @@
 // ─── Game state ───────────────────────────────────────────────────────────────
 let state = {
   campaign: 'checkers',
+  difficulty: 'hard',
   wave: 1,
   dollars: 0,
   moveCount: 0,
@@ -160,6 +161,7 @@ function startWave(wave, chessPieces) {
 
   state.waveCheckerCount = state.checkers.length;
   syncBoard(); updateUI(); renderStrips();
+  autoSave();
 
   // Mother Checker: boss of the final wave, placed at row 0 near center
   if (wave === MAX_WAVE) {

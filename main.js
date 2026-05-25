@@ -1,6 +1,16 @@
 requestAnimationFrame(gameLoop);
 
+// ─── Difficulty selection ─────────────────────────────────────────────────────
+document.querySelectorAll('.diff-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.difficulty = btn.dataset.diff;
+  });
+});
+
 function renderTitleSaveSlots() {
+  updateCampaignButtons();
   const saves     = getSaves();
   const container = document.getElementById('title-save-slots');
   container.innerHTML = '';
@@ -15,7 +25,8 @@ function renderTitleSaveSlots() {
 
     const info = document.createElement('div');
     info.className = 'slot-info';
-    info.innerHTML = `<strong>Wave ${save.wave}</strong> &mdash; $${save.dollars||0}<br><small>${save.date}</small>`;
+    const diff = save.difficulty ? ` · ${save.difficulty.charAt(0).toUpperCase() + save.difficulty.slice(1)}` : '';
+    info.innerHTML = `<strong>Wave ${save.wave}${diff}</strong> &mdash; $${save.dollars||0}<br><small>${save.date}</small>`;
 
     const btns = document.createElement('div');
     btns.className = 'slot-btns';
@@ -34,15 +45,24 @@ function renderTitleSaveSlots() {
   });
 }
 
+function updateCampaignButtons() {
+  const autoSaves = getAutoSaves();
+  document.getElementById('new-game-btn').textContent = autoSaves['checkers'] ? 'Continue' : 'New Game';
+  document.getElementById('new-go-btn').textContent   = autoSaves['go']       ? 'Continue' : 'New Game';
+}
+
 document.getElementById('new-game-btn').onclick = () => {
   document.getElementById('title-screen').classList.add('hidden');
-  state.campaign = 'checkers';
-  startWave(1, initialChessPieces());
+  if (!loadAutoSave('checkers')) {
+    state.campaign = 'checkers';
+    startWave(1, initialChessPieces());
+  }
 };
 
 document.getElementById('new-go-btn').onclick = () => {
   document.getElementById('title-screen').classList.add('hidden');
-  startGoWave(1, initialChessPieces());
+  if (!loadAutoSave('go')) startGoWave(1, initialChessPieces());
 };
 
 renderTitleSaveSlots();
+updateCampaignButtons();

@@ -146,8 +146,11 @@ function executeChessMove(piece, toRow, toCol) {
       // Raider: earns $3 per capture
       if (piece.trait === 'raider' && anyCapture) state.dollars += 3;
       // Mercenary: 1/3 chance to desert after making a capture
-      if (piece.trait === 'mercenary' && anyCapture && Math.random() < 1/3)
+      if (piece.trait === 'mercenary' && anyCapture && Math.random() < 1/3) {
+        showEventAnnotation('Deserted!', 'Mercenary fled', piece.col, piece.row,
+          '#ffd700', 'rgba(80,40,0,0.92)');
         state.chessPieces = state.chessPieces.filter(p => p.id !== piece.id);
+      }
 
       syncBoard();
       if (state.campaign === 'go') applyGoCaptures();

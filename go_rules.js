@@ -234,4 +234,5 @@ function startGoWave(wave, chessPieces) {
 
   state.waveCheckerCount = cfg.startStones;
   syncBoard(); updateUI(); renderStrips();
+  autoSave();
 }

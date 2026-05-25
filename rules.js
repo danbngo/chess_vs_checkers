@@ -1,22 +1,22 @@
 // ─── Check detection (multi-jump aware) ───────────────────────────────────────
-// Returns true if any checker on `board` can reach (targetRow, targetCol) via
-// one or more captures (including multi-jump chains).
+// Returns true if any checker on `board` can capture (jump over) the piece at
+// (targetRow, targetCol) via one or more captures (including multi-jump chains).
 function isThreatenedByChecker(targetRow, targetCol, board) {
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const ck = board[r]?.[c];
       if (ck?.team !== 'checker') continue;
-      if (_ckCanReach(ck, r, c, targetRow, targetCol, new Set(), board)) return true;
+      if (_ckCanCapture(ck, r, c, targetRow, targetCol, new Set(), board)) return true;
     }
   }
   return false;
 }
 
 // DFS: can checker ck, currently at (curRow,curCol) with capturedIds already
-// virtually removed, reach (targetRow,targetCol) via one or more captures?
-// No cycle-detection needed: each recursive call adds ≥1 piece to capturedIds,
-// bounding depth by the number of chess pieces.
-function _ckCanReach(ck, curRow, curCol, targetRow, targetCol, capturedIds, board) {
+// virtually removed, capture (jump OVER) the piece at (targetRow,targetCol)?
+// Semantics: the target is the piece being captured, not a landing square.
+// No cycle-detection needed: each recursive call adds ≥1 piece to capturedIds.
+function _ckCanCapture(ck, curRow, curCol, targetRow, targetCol, capturedIds, board) {
   const dirs = ck.isKing ? [[-1,-1],[-1,1],[1,-1],[1,1]] : [[1,-1],[1,1]];
 
   if (ck.isFlyingKing) {
@@ -26,19 +26,20 @@ function _ckCanReach(ck, curRow, curCol, targetRow, targetCol, capturedIds, boar
       let capPiece = null, capR = -1, capC = -1;
       while (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
         const cell = board[r][c];
-        if (!cell || (cell && capturedIds.has(cell.id))) { r += dr; c += dc; continue; }
+        if (!cell || capturedIds.has(cell.id)) { r += dr; c += dc; continue; }
         if (cell.team === 'chess') { capPiece = cell; capR = r; capC = c; }
-        break; // blocked (or found capture target)
+        break;
       }
       if (!capPiece) continue;
-      // Any empty (or virtually-captured) square past the captured piece is a valid landing
+      const isTarget = (capR === targetRow && capC === targetCol);
       const newCap = new Set(capturedIds); newCap.add(capPiece.id);
+      // Any free square past the captured piece is a valid landing
       let lr = capR+dr, lc = capC+dc;
       while (lr >= 0 && lr < ROWS && lc >= 0 && lc < COLS) {
         const land = board[lr][lc];
-        if (land && !capturedIds.has(land.id)) break; // real occupied square
-        if (lr === targetRow && lc === targetCol) return true;
-        if (_ckCanReach(ck, lr, lc, targetRow, targetCol, newCap, board)) return true;
+        if (land && !capturedIds.has(land.id)) break; // real occupied square blocks landing
+        if (isTarget) return true; // capPiece IS the target and a free landing exists
+        if (_ckCanCapture(ck, lr, lc, targetRow, targetCol, newCap, board)) return true;
         lr += dr; lc += dc;
       }
     }
@@ -57,20 +58,31 @@ function _ckCanReach(ck, curRow, curCol, targetRow, targetCol, capturedIds, boar
     const land = board[lr][lc];
     const landFree = !land || capturedIds.has(land.id);
 
-    if (landFree) {
-      // Standard single capture
-      if (lr === targetRow && lc === targetCol) return true;
+    if (nr === targetRow && nc === targetCol) {
+      // mid IS the target piece — direct threat if landing square is free
+      if (landFree) return true;
+      // Triple king: target sandwiched — can double-capture over target + land
+      if (ck.isTripleKing && land.team === 'chess' && !capturedIds.has(land.id)) {
+        const lr2 = lr+dr, lc2 = lc+dc;
+        if (lr2 >= 0 && lr2 < ROWS && lc2 >= 0 && lc2 < COLS) {
+          const land2 = board[lr2][lc2];
+          if (!land2 || capturedIds.has(land2.id)) return true;
+        }
+      }
+    } else if (landFree) {
+      // mid is not the target — capture mid and recurse from landing square
       const newCap = new Set(capturedIds); newCap.add(mid.id);
-      if (_ckCanReach(ck, lr, lc, targetRow, targetCol, newCap, board)) return true;
+      if (_ckCanCapture(ck, lr, lc, targetRow, targetCol, newCap, board)) return true;
     } else if (ck.isTripleKing && land.team === 'chess' && !capturedIds.has(land.id)) {
-      // Triple king double-capture: jump over mid AND land (which is also a chess piece)
+      // Triple king double-capture: jump over mid AND land
       const lr2 = lr+dr, lc2 = lc+dc;
       if (lr2 >= 0 && lr2 < ROWS && lc2 >= 0 && lc2 < COLS) {
         const land2 = board[lr2][lc2];
         if (!land2 || capturedIds.has(land2.id)) {
-          if (lr2 === targetRow && lc2 === targetCol) return true;
+          // land (at lr,lc) could be the target
+          if (lr === targetRow && lc === targetCol) return true;
           const newCap = new Set(capturedIds); newCap.add(mid.id); newCap.add(land.id);
-          if (_ckCanReach(ck, lr2, lc2, targetRow, targetCol, newCap, board)) return true;
+          if (_ckCanCapture(ck, lr2, lc2, targetRow, targetCol, newCap, board)) return true;
         }
       }
     }

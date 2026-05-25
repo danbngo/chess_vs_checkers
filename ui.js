@@ -68,8 +68,12 @@ function showMessage(title, body, onContinue) {
 }
 
 // ─── Earnings & shop ──────────────────────────────────────────────────────────
+const DIFFICULTY_MULTIPLIER = { easy: 2, medium: 1.5, hard: 1, pro: 0.66 };
+
 function calcEarnings(moveCount, checkerCount) {
-  return 5 + Math.max(0, 5 * checkerCount - moveCount);
+  const base = 5 + Math.max(0, 5 * checkerCount - moveCount);
+  const mult = DIFFICULTY_MULTIPLIER[state.difficulty] ?? 1;
+  return Math.round(base * mult);
 }
 
 function pickTrait(wave) {
@@ -285,6 +289,7 @@ function waveWon() {
   state.phase = 'wave_end';
   updateUI();
   if (state.wave >= MAX_WAVE) {
+    clearAutoSave(state.campaign);
     showMessage('Victory!',
       `You cleared all ${MAX_WAVE} waves! Final score: $${state.dollars}.`,
       () => {
@@ -309,7 +314,81 @@ function gameLost() {
 }
 
 // ─── Save / Load ──────────────────────────────────────────────────────────────
-const SAVE_KEY = 'cvsc_saves';
+const SAVE_KEY     = 'cvsc_saves';
+const AUTOSAVE_KEY = 'cvsc_autosave';
+
+function getAutoSaves() {
+  try { return JSON.parse(localStorage.getItem(AUTOSAVE_KEY)) || {}; }
+  catch { return {}; }
+}
+
+function autoSave() {
+  if (state.phase === 'wave_end') return;
+  const saves = getAutoSaves();
+  saves[state.campaign] = {
+    campaign: state.campaign,
+    difficulty: state.difficulty,
+    wave: state.wave, dollars: state.dollars, moveCount: state.moveCount,
+    waveCheckerCount: state.waveCheckerCount, shop: [], nextId: state.nextId,
+    chessPieces: state.chessPieces.map(p => ({
+      type: p.type, team: p.team, row: p.row, col: p.col,
+      moved: p.moved, id: p.id, trait: p.trait ?? null, promotedFrom: p.promotedFrom ?? null,
+    })),
+    checkers: state.checkers.map(c => ({
+      team: c.team, row: c.row, col: c.col, isLight: c.isLight ?? false,
+      isKing: c.isKing, isFlyingKing: c.isFlyingKing ?? false, isTripleKing: c.isTripleKing ?? false, id: c.id,
+    })),
+    goPieces: state.goPieces.map(g => ({ team: g.team, row: g.row, col: g.col, id: g.id })),
+    revivedPieces: state.revivedPieces.map(p => ({
+      type: p.type, team: p.team, row: p.row, col: p.col,
+      moved: p.moved, id: p.id, trait: p.trait ?? null, promotedFrom: p.promotedFrom ?? null,
+    })),
+    capturedByChess:    state.capturedByChess,
+    capturedByCheckers: state.capturedByCheckers,
+    capturedByGo:       state.capturedByGo,
+    capturedGoByChess:  state.capturedGoByChess,
+    date: new Date().toLocaleString(),
+  };
+  try { localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(saves)); }
+  catch {}
+}
+
+function clearAutoSave(campaign) {
+  const saves = getAutoSaves();
+  delete saves[campaign];
+  try { localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(saves)); }
+  catch {}
+}
+
+function loadAutoSave(campaign) {
+  const save = getAutoSaves()[campaign];
+  if (!save) return false;
+  activeAnims.clear();
+  state.campaign         = save.campaign         || campaign;
+  state.difficulty       = save.difficulty       || 'hard';
+  state.wave             = save.wave;
+  state.dollars          = save.dollars          || 0;
+  state.moveCount        = save.moveCount        || 0;
+  state.waveCheckerCount = save.waveCheckerCount || 0;
+  state.shop             = save.shop             || [];
+  state.nextId           = save.nextId;
+  state.chessPieces      = save.chessPieces.map(p => ({ ...p, dying: false }));
+  state.checkers         = (save.checkers || []).map(c => ({ ...c, type: 'checker', dying: false }));
+  state.goPieces         = save.goPieces || [];
+  state.revivedPieces    = (save.revivedPieces || []).map(p => ({ ...p, dying: false }));
+  state.capturedByChess    = save.capturedByChess    || [];
+  state.capturedByCheckers = save.capturedByCheckers || [];
+  state.capturedByGo       = save.capturedByGo       || [];
+  state.capturedGoByChess  = save.capturedGoByChess  || [];
+  state.selected = null; state.phase = 'player';
+  state.enPassantCheckers = new Set();
+  moveAnnotation = null;
+  syncBoard(); updateUI(); renderStrips();
+  document.querySelectorAll('.diff-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.diff === state.difficulty);
+  });
+  return true;
+}
 
 function getSaves() {
   try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || [null, null, null]; }
@@ -320,6 +399,7 @@ function saveGame(slot) {
   const saves = getSaves();
   saves[slot] = {
     campaign: state.campaign,
+    difficulty: state.difficulty,
     wave: state.wave, dollars: state.dollars, moveCount: state.moveCount,
     waveCheckerCount: state.waveCheckerCount, shop: state.shop, nextId: state.nextId,
     chessPieces: state.chessPieces.map(p => ({
@@ -350,6 +430,7 @@ function loadGame(slot) {
   if (!save) return;
   activeAnims.clear();
   state.campaign         = save.campaign         || 'checkers';
+  state.difficulty       = save.difficulty       || 'hard';
   state.wave             = save.wave;
   state.dollars          = save.dollars          || 0;
   state.moveCount        = save.moveCount        || 0;
@@ -369,6 +450,9 @@ function loadGame(slot) {
   moveAnnotation = null;
   syncBoard(); updateUI(); renderStrips();
   document.getElementById('menu-overlay').classList.add('hidden');
+  document.querySelectorAll('.diff-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.diff === state.difficulty);
+  });
 }
 
 function renderMenuSlots() {
@@ -384,7 +468,8 @@ function renderMenuSlots() {
     info.className = 'slot-info';
     if (save) {
       const camp = save.campaign === 'go' ? 'Go' : 'Checkers';
-      info.innerHTML = `<strong>${camp} Wave ${save.wave}</strong> &mdash; $${save.dollars||0}<br><small>${save.date}</small>`;
+      const diff = save.difficulty ? ` · ${save.difficulty.charAt(0).toUpperCase() + save.difficulty.slice(1)}` : '';
+      info.innerHTML = `<strong>${camp} Wave ${save.wave}${diff}</strong> &mdash; $${save.dollars||0}<br><small>${save.date}</small>`;
     } else {
       info.textContent = 'Empty slot';
     }
@@ -418,6 +503,22 @@ document.getElementById('menu-btn').onclick = openMenu;
 
 document.getElementById('menu-close').onclick = () => {
   document.getElementById('menu-overlay').classList.add('hidden');
+};
+
+document.getElementById('menu-restart').onclick = () => {
+  document.getElementById('menu-overlay').classList.add('hidden');
+  const camp = state.campaign;
+  showMessage(
+    'Restart Campaign?',
+    'This will abandon your current run and start from Wave 1. Your manual saves are kept.',
+    () => {
+      clearAutoSave(camp);
+      document.getElementById('shop-overlay').classList.add('hidden');
+      document.getElementById('message-overlay').classList.add('hidden');
+      if (camp === 'go') startGoWave(1, initialChessPieces());
+      else { state.campaign = 'checkers'; startWave(1, initialChessPieces()); }
+    }
+  );
 };
 
 document.getElementById('menu-exit-title').onclick = () => {
