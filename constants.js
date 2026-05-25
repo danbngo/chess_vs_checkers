@@ -1,6 +1,6 @@
 // ─── Board / Canvas ───────────────────────────────────────────────────────────
 const COLS = 8, ROWS = 8;
-const CELL = 80;
+let CELL = 80;
 const MINI = 22;
 
 const canvas    = document.getElementById('game-canvas');

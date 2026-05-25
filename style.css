@@ -537,13 +537,6 @@ body {
 
 /* ── Mobile ───────────────────────────────────────────────────────────────── */
 @media (max-width: 700px) {
-  /* Board area scrolls horizontally rather than the whole page overflowing */
-  #board-area {
-    overflow-x: auto;
-    justify-content: flex-start;
-    width: 100%;
-  }
-
   /* Prevent double-tap zoom on the canvas */
   #game-canvas { touch-action: manipulation; }
 

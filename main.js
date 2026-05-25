@@ -1,3 +1,32 @@
+// ─── Responsive board sizing ──────────────────────────────────────────────────
+let _resizeTimer = null;
+
+function resizeBoard() {
+  const headerH  = document.getElementById('header').offsetHeight;
+  // Overhead: two strips (48px each) + their borders (2px×2 per strip = 8px) + canvas border (3px×2 = 6px)
+  const overheadW = leftStrip.width * 2 + 8 + 6;
+  // Overhead: header + board-area top/bottom margins (8px each) + canvas border (6px)
+  const overheadH = headerH + 8 + 8 + 6;
+
+  const availW = window.innerWidth  - overheadW;
+  const availH = window.innerHeight - overheadH;
+
+  CELL = Math.max(28, Math.min(90, Math.floor(Math.min(availW / COLS, availH / ROWS))));
+
+  canvas.width      = COLS * CELL;
+  canvas.height     = ROWS * CELL;
+  leftStrip.height  = ROWS * CELL;
+  rightStrip.height = ROWS * CELL;
+
+  if (typeof renderStrips === 'function') renderStrips();
+}
+
+window.addEventListener('resize', () => {
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(resizeBoard, 80);
+});
+
+resizeBoard();
 requestAnimationFrame(gameLoop);
 
 // ─── Difficulty selection ─────────────────────────────────────────────────────
