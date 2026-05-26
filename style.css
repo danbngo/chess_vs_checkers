@@ -244,24 +244,6 @@ body {
   border-radius: 3px;
 }
 
-/* ── Sidebar (instructions only) ──────────────────────────────────────────── */
-#sidebar {
-  position: fixed;
-  right: 12px;
-  top: 80px;
-  width: 150px;
-  background: #16213e;
-  border: 2px solid #0f3460;
-  border-radius: 8px;
-  padding: 10px;
-}
-
-#instructions {
-  font-size: 0.72em;
-  color: #555e70;
-  line-height: 1.6;
-}
-#instructions p { margin-bottom: 6px; }
 
 /* ── Title screen ─────────────────────────────────────────────────────────── */
 #title-screen {
@@ -539,9 +521,6 @@ body {
 @media (max-width: 700px) {
   /* Prevent double-tap zoom on the canvas */
   #game-canvas { touch-action: manipulation; }
-
-  /* Hide the instructions sidebar — not useful on mobile */
-  #sidebar { display: none; }
 
   /* Slimmer header */
   #header { padding: 7px 12px; }
