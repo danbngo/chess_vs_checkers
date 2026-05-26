@@ -369,6 +369,16 @@ body {
 .campaign-btn:hover:not(:disabled) { background: #c73652; }
 .campaign-btn:disabled { background: #333; cursor: default; }
 
+.campaign-btn-fresh {
+  margin-top: 6px;
+  background: transparent;
+  border: 1px solid #e94560;
+  color: #e94560;
+  font-size: 0.85em;
+  padding: 6px 22px;
+}
+.campaign-btn-fresh:hover { background: rgba(233,69,96,0.15); }
+
 #title-saves { border-top: 1px solid #1e3a5f; padding-top: 20px; }
 
 #title-saves-heading {

@@ -176,6 +176,7 @@ function goTurnDone() {
   if (!state.chessPieces.some(p => p.type === 'king' && !p.dying)) { gameLost(); return; }
   state.phase = 'player';
   syncBoard();
+  autoSave();
   const hasMove = state.chessPieces.filter(p => !p.dying).some(p => getLegalMoves(p).length > 0);
   if (!hasMove) {
     state.phase = 'wave_end';

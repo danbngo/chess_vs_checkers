@@ -75,9 +75,15 @@ function renderTitleSaveSlots() {
 }
 
 function updateCampaignButtons() {
-  const autoSaves = getAutoSaves();
-  document.getElementById('new-game-btn').textContent = autoSaves['checkers'] ? 'Continue' : 'New Game';
-  document.getElementById('new-go-btn').textContent   = autoSaves['go']       ? 'Continue' : 'New Game';
+  const autoSaves   = getAutoSaves();
+  const hasCheckers = !!autoSaves['checkers'];
+  const hasGo       = !!autoSaves['go'];
+
+  document.getElementById('new-game-btn').textContent = hasCheckers ? 'Continue' : 'New Game';
+  document.getElementById('new-go-btn').textContent   = hasGo       ? 'Continue' : 'New Game';
+
+  document.getElementById('new-game-fresh-btn').classList.toggle('hidden', !hasCheckers);
+  document.getElementById('new-go-fresh-btn').classList.toggle('hidden', !hasGo);
 }
 
 document.getElementById('new-game-btn').onclick = () => {
@@ -88,9 +94,20 @@ document.getElementById('new-game-btn').onclick = () => {
   }
 };
 
+document.getElementById('new-game-fresh-btn').onclick = () => {
+  document.getElementById('title-screen').classList.add('hidden');
+  state.campaign = 'checkers';
+  startWave(1, initialChessPieces());
+};
+
 document.getElementById('new-go-btn').onclick = () => {
   document.getElementById('title-screen').classList.add('hidden');
   if (!loadAutoSave('go')) startGoWave(1, initialChessPieces());
+};
+
+document.getElementById('new-go-fresh-btn').onclick = () => {
+  document.getElementById('title-screen').classList.add('hidden');
+  startGoWave(1, initialChessPieces());
 };
 
 renderTitleSaveSlots();
