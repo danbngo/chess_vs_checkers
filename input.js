@@ -36,9 +36,10 @@ canvas.addEventListener('click', e => {
   const row  = Math.floor((e.clientY - rect.top)  / CELL);
 
   if (state.selected?.type === 'chess') {
-    const { piece, moves } = state.selected;
+    const { piece, moves, isMultiJump } = state.selected;
     const hit = moves.find(([mr, mc]) => mr===row && mc===col);
     if (hit) { executeChessMove(piece, row, col); return; }
+    if (isMultiJump) return; // locked in multi-jump — must complete the chain
   }
   const clicked = state.board[row]?.[col];
   if (clicked?.team === 'chess') {
@@ -60,6 +61,7 @@ canvas.addEventListener('click', e => {
 
 // ─── Chess move execution ─────────────────────────────────────────────────────
 function executeChessMove(piece, toRow, toCol) {
+  const isMultiJump         = state.selected?.isMultiJump ?? false;
   const target              = state.board[toRow][toCol];
   const fromRow             = piece.row, fromCol = piece.col;
   const wasThreatenedBefore = isThreatenedByChecker(fromRow, fromCol, state.board);
@@ -86,7 +88,7 @@ function executeChessMove(piece, toRow, toCol) {
     if (castleRook) state.board[7][rookFromCol] = null;
   }
 
-  state.moveCount++;
+  if (!isMultiJump) state.moveCount++;
   state.selected = null; state.phase = 'animating';
   if (state.campaign !== 'go') state.enPassantCheckers = new Set();
   state.board[piece.row][piece.col] = null;
@@ -137,6 +139,7 @@ function executeChessMove(piece, toRow, toCol) {
       }
 
       // Player checker promotion: non-king reaching row 0 promotes to king
+      const wasCheckerKing = piece.isKing;
       if (piece.type === 'checker' && piece.team === 'chess' && !piece.isKing && piece.row === 0) {
         piece.isKing = true;
         if (state.wave >= FLYING_KING_WAVE && Math.random() < 0.5) piece.isFlyingKing = true;
@@ -174,6 +177,20 @@ function executeChessMove(piece, toRow, toCol) {
           goTurnDone();
         }
       } else {
+        // Multi-jump: if this was a capture and more captures are available, keep player's turn
+        const justPromoted = !wasCheckerKing && piece.isKing;
+        const stillAlive   = state.chessPieces.some(p => p.id === piece.id);
+        if (anyCapture && piece.type === 'checker' && piece.team === 'chess'
+            && !wasPromotion && !justPromoted && stillAlive) {
+          const continuations = getLegalMoves(piece).filter(
+            ([mr, mc]) => findPlayerCheckerCaptures(piece, mr, mc, state.board).length > 0
+          );
+          if (continuations.length > 0) {
+            state.phase = 'player';
+            state.selected = { type: 'chess', piece, moves: continuations, isMultiJump: true };
+            return;
+          }
+        }
         state.phase = 'checker_move';
         setTimeout(runCheckerTurn, 350);
       }

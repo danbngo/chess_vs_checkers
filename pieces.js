@@ -269,8 +269,11 @@ function getPlayerCheckerMoves(piece, board) {
         if (lr2 >= 0 && lr2 < ROWS && lc2 >= 0 && lc2 < COLS && !board[lr2][lc2])
           moves.push([lr2, lc2]);     // double capture (triple king)
       }
+    } else if (piece.isTripleKing && t.team === 'chess') {
+      const lr = nr+dr, lc = nc+dc;  // hop over allied chess piece
+      if (lr >= 0 && lr < ROWS && lc >= 0 && lc < COLS && !board[lr][lc])
+        moves.push([lr, lc]);
     }
-    // friendly chess piece: blocked, no move
   }
   return moves;
 }

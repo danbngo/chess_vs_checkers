@@ -200,8 +200,8 @@ function startWave(wave, chessPieces) {
       'Some checker kings can now slide diagonally any distance — like a bishop. Their numbers grow each wave. When a checker promotes, it has a 50% chance of becoming a Flying King.', () => {});
   }
   if (wave === TRIPLE_KING_WAVE) {
-    showMessage('Double Kings!',
-      'Some checker kings have returned to their home row to become Double Kings. They can capture two enemies in one jump and hop over allied pieces.', () => {});
+    showMessage('Triple Kings!',
+      'Some checker kings have returned to their home row to become Triple Kings. They can capture two enemies in one jump and hop over allied pieces.', () => {});
   }
   if (wave === 1 && !state.seenTutorial) {
     state.seenTutorial = true;
