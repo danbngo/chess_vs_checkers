@@ -2,21 +2,33 @@
 let _resizeTimer = null;
 
 function resizeBoard() {
-  const headerH  = document.getElementById('header').offsetHeight;
-  // Overhead: two strips (48px each) + their borders (2px×2 per strip = 8px) + canvas border (3px×2 = 6px)
-  const overheadW = leftStrip.width * 2 + 8 + 6;
-  // Overhead: header + board-area top/bottom margins (8px each) + canvas border (6px)
-  const overheadH = headerH + 8 + 8 + 6;
+  const headerH    = document.getElementById('header').offsetHeight;
+  const STRIP_THICK = 48;
+  const isPortrait  = window.innerWidth < window.innerHeight && window.innerWidth <= 700;
 
-  const availW = window.innerWidth  - overheadW;
-  const availH = window.innerHeight - overheadH;
+  let availW, availH;
+  if (isPortrait) {
+    // Strips go below canvas — no side width overhead
+    availW = window.innerWidth - 6;                                      // 6 = canvas border (3px×2)
+    availH = window.innerHeight - (headerH + 8 + 8 + 6 + (STRIP_THICK + 4) * 2); // two strips + borders
+  } else {
+    // Strips beside canvas
+    availW = window.innerWidth  - (STRIP_THICK * 2 + 8 + 6);
+    availH = window.innerHeight - (headerH + 8 + 8 + 6);
+  }
 
   CELL = Math.max(28, Math.min(90, Math.floor(Math.min(availW / COLS, availH / ROWS))));
 
-  canvas.width      = COLS * CELL;
-  canvas.height     = ROWS * CELL;
-  leftStrip.height  = ROWS * CELL;
-  rightStrip.height = ROWS * CELL;
+  canvas.width  = COLS * CELL;
+  canvas.height = ROWS * CELL;
+
+  if (isPortrait) {
+    leftStrip.width   = COLS * CELL; leftStrip.height  = STRIP_THICK;
+    rightStrip.width  = COLS * CELL; rightStrip.height = STRIP_THICK;
+  } else {
+    leftStrip.width   = STRIP_THICK; leftStrip.height  = ROWS * CELL;
+    rightStrip.width  = STRIP_THICK; rightStrip.height = ROWS * CELL;
+  }
 
   if (typeof renderStrips === 'function') renderStrips();
 }

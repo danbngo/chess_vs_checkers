@@ -198,10 +198,21 @@ function drawTooltip() {
   }, 0);
   const bw = maxW + padX * 2, bh = lines.length * lineH + padY * 2;
 
-  let bx = mx + 14, by = my - bh / 2;
-  if (bx + bw > canvas.width)  bx = mx - bw - 14;
-  if (by < 2)                  by = 2;
-  if (by + bh > canvas.height) by = canvas.height - bh - 2;
+  const isPortrait = window.innerWidth < window.innerHeight && window.innerWidth <= 700;
+  const isLandscapeMobile = window.innerWidth <= 700 && window.innerWidth >= window.innerHeight;
+  let bx, by;
+  if (isPortrait) {
+    bx = canvas.width / 2 - bw / 2;
+    by = canvas.height - bh - 4;
+  } else if (isLandscapeMobile) {
+    bx = canvas.width - bw - 4;
+    by = Math.min(Math.max(my - bh / 2, 2), canvas.height - bh - 2);
+  } else {
+    bx = mx + 14; by = my - bh / 2;
+    if (bx + bw > canvas.width)  bx = mx - bw - 14;
+    if (by < 2)                  by = 2;
+    if (by + bh > canvas.height) by = canvas.height - bh - 2;
+  }
 
   ctx.fillStyle = 'rgba(15,20,35,0.93)';
   ctx.strokeStyle = 'rgba(120,160,255,0.5)';
@@ -284,12 +295,6 @@ function evaluateMove(piece, fromRow, fromCol, wasThreatenedBefore, captured, wa
   if (captured?.isKing && !nowThreatened) return '!!';
   if (captured && nowThreatened) return '!?';
   if (captured && !nowThreatened) return '!';
-  let nearRisk = 0;
-  for (const dcc of [-2, 0, 2]) {
-    const nr = piece.row-2, nc = piece.col+dcc;
-    if (nr>=0 && nc>=0 && nc<COLS && board[nr]?.[nc]?.team==='checker') nearRisk++;
-  }
-  if (nearRisk >= 2) return '?!';
   return '';
 }
 
@@ -339,6 +344,14 @@ function drawMiniPiece(drawCtx, key, cx, cy, tintColor) {
 }
 
 function renderStrips() {
+  if (leftStrip.width > leftStrip.height) {
+    renderStripsHorizontal();
+  } else {
+    renderStripsVertical();
+  }
+}
+
+function renderStripsVertical() {
   const sw = leftStrip.width, sh = leftStrip.height;
   const cx = sw/2, gap = MINI+3, topPad = 14;
 
@@ -371,6 +384,43 @@ function renderStrips() {
     state.capturedByChess.forEach(({ isKing, isLight }, i) => {
       const tint = isLight ? TINT_CHECKER_LIGHT : TINT_CHECKER;
       drawMiniPiece(rctx, isKing ? 'checker_king' : 'checker', cx, topPad + i*gap + MINI/2, tint);
+    });
+  }
+}
+
+function renderStripsHorizontal() {
+  const sw = leftStrip.width, sh = leftStrip.height;
+  const cy = sh / 2, gap = MINI + 3, leftPad = 36; // 36px reserved for label
+
+  // Left strip: chess pieces lost to enemy action
+  lctx.clearRect(0, 0, sw, sh);
+  lctx.fillStyle = '#111827'; lctx.fillRect(0, 0, sw, sh);
+  lctx.save();
+  lctx.font = 'bold 8px sans-serif'; lctx.textAlign = 'center'; lctx.textBaseline = 'middle';
+  lctx.fillStyle = '#e94560'; lctx.fillText('LOST', 18, cy);
+  lctx.restore();
+  const lostList = state.campaign === 'go' ? state.capturedByGo : state.capturedByCheckers;
+  lostList.forEach((type, i) => {
+    drawMiniPiece(lctx, type, leftPad + i * gap + MINI / 2, cy, TINT_CHESS);
+  });
+
+  // Right strip: enemies captured by chess
+  rctx.clearRect(0, 0, sw, sh);
+  rctx.fillStyle = '#111827'; rctx.fillRect(0, 0, sw, sh);
+  rctx.save();
+  rctx.font = 'bold 8px sans-serif'; rctx.textAlign = 'center'; rctx.textBaseline = 'middle';
+  rctx.fillStyle = '#44dd44'; rctx.fillText('TOOK', 18, cy);
+  rctx.restore();
+  if (state.campaign === 'go') {
+    state.capturedGoByChess.forEach((_, i) => {
+      const cx = leftPad + i * gap + MINI / 2, r = MINI / 2 - 2;
+      rctx.fillStyle = '#111';
+      rctx.beginPath(); rctx.arc(cx, cy, r, 0, Math.PI * 2); rctx.fill();
+    });
+  } else {
+    state.capturedByChess.forEach(({ isKing, isLight }, i) => {
+      const tint = isLight ? TINT_CHECKER_LIGHT : TINT_CHECKER;
+      drawMiniPiece(rctx, isKing ? 'checker_king' : 'checker', leftPad + i * gap + MINI / 2, cy, tint);
     });
   }
 }
