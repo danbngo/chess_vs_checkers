@@ -132,11 +132,6 @@ function getLegalMoves(piece) {
     return raw.filter(([mr, mc]) => {
       const temp = state.board.map(row => [...row]);
       temp[piece.row][piece.col] = null;
-      const target = temp[mr][mc];
-      if (target?.team === 'go') {
-        const goGroup = getGroup(mr, mc, temp, 'go');
-        if (getGroupLiberties(goGroup, temp) > 0) return false;
-      }
       temp[mr][mc] = { ...piece, row: mr, col: mc };
       // Capture any go groups that become dead after this chess move
       const deadGo = findDeadGroups('go', temp);

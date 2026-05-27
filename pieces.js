@@ -175,7 +175,7 @@ const PIECE_DEFS = {
             moves.push([r-2, c+2*dc]);
         }
       }
-      if (r > 0 && board[r-1][c]?.team === 'checker') moves.push([r-1, c]);
+      if (r > 0 && (board[r-1][c]?.team === 'checker' || board[r-1][c]?.team === 'go')) moves.push([r-1, c]);
       return moves;
     }
   },
@@ -203,7 +203,7 @@ const PIECE_DEFS = {
           const t = board[nr][nc];
           if (!t) {
             moves.push([nr, nc]);
-          } else if (t.team === 'checker') {
+          } else if (t.team === 'checker' || t.team === 'go') {
             moves.push([nr, nc]);
             break;
           } else {
