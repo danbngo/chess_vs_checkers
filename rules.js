@@ -468,7 +468,9 @@ function checkerTurnDone() {
     gameLost();
     return;
   }
-  motherSpawn();
+  if (state.wave === MAX_WAVE && state.moveCount % 2 === 0) {
+    motherSpawn();
+  }
   state.phase = 'player';
   syncBoard();
   autoSave();

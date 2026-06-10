@@ -63,17 +63,22 @@ function checkerStartPositions(count, allowLight) {
     return [...darkPri, ...darkOv].slice(0, count).map(pos => ({ pos, isLight: false }));
   }
 
-  // Each piece independently has 50% chance of being light (red).
-  // Shuffle the result so king/non-king index assignment gets a random mix.
   const darkPool  = [...darkPri,  ...darkOv];
   const lightPool = [...lightPri, ...lightOv];
-  let di = 0, li = 0;
-  const result = [];
-  for (let i = 0; i < count; i++) {
-    const goLight = (Math.random() < 0.5 && li < lightPool.length) || di >= darkPool.length;
-    if (goLight) result.push({ pos: lightPool[li++], isLight: true  });
-    else         result.push({ pos: darkPool[di++],  isLight: false });
+  if (count <= 1) {
+    const pool = [...darkPool.map(pos => ({ pos, isLight: false })), ...lightPool.map(pos => ({ pos, isLight: true }))];
+    return [pool[Math.floor(Math.random() * pool.length)]];
   }
+
+  const result = [
+    { pos: darkPool[0], isLight: false },
+    { pos: lightPool[0], isLight: true },
+  ];
+  const remaining = [];
+  for (let i = 1; i < darkPool.length; i++) remaining.push({ pos: darkPool[i], isLight: false });
+  for (let i = 1; i < lightPool.length; i++) remaining.push({ pos: lightPool[i], isLight: true });
+  fisherYates(remaining);
+  result.push(...remaining.slice(0, Math.max(0, count - 2)));
   fisherYates(result);
   return result;
 }
@@ -182,7 +187,7 @@ function startWave(wave, chessPieces) {
       syncBoard(); updateUI(); renderStrips();
     }
     showMessage('Mother Checker!',
-      'The Mother Checker commands the final wave. She spawns a new checker every turn and cannot be captured until all other checkers are defeated!', () => {});
+      'The Mother Checker commands the final wave. She spawns a new checker every two turns and cannot be captured until all other checkers are defeated!', () => {});
   }
 
   if (allowLight && !state.seenLightWarning) {

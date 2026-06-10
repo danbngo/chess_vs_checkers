@@ -302,7 +302,7 @@ const CHECKER_DESCS = {
   checker_king: 'A promoted checker that can move diagonally in all directions (forwards and backwards). Gains the ability to capture in any diagonal direction.',
   checker_flying_king: 'A rare flying king (from wave 5+). Slides multiple squares diagonally like a bishop, allowing long-range attacks and evasion.',
   checker_triple_king: 'A king that returned to its starting row. Can capture two consecutive enemy pieces in one jump and hop over allied pieces.',
-  checker_mother: 'The Mother Checker — boss of the final wave. Spawns a new checker each turn. Immune to capture until all other checkers are defeated.',
+  checker_mother: 'The Mother Checker — boss of the final wave. Spawns a new checker every two turns. Immune to capture until all other checkers are defeated.',
 };
 
 // ─── Wave config ──────────────────────────────────────────────────────────────

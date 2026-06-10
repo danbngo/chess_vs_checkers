@@ -93,6 +93,20 @@ function pickTrait(wave) {
   return 'raider';
 }
 
+function weightedShopType(pool, chosenTypes) {
+  const weighted = pool.map(type => ({
+    type,
+    weight: chosenTypes.has(type) ? 1 : 2,
+  }));
+  const total = weighted.reduce((sum, item) => sum + item.weight, 0);
+  let roll = Math.random() * total;
+  for (const item of weighted) {
+    roll -= item.weight;
+    if (roll < 0) return item.type;
+  }
+  return weighted[weighted.length - 1].type;
+}
+
 function waveShopAdditions(wave) {
   const livePieces = state.chessPieces.filter(p => !p.dying);
   let backSpace  = 8 - livePieces.filter(p => !isFrontRowType(p.type)).length
@@ -118,30 +132,55 @@ function waveShopAdditions(wave) {
 
   const count = 5;
   const picks = [];
+  const chosenTypes = new Set();
 
   if (frontSpace > 0) {
-    picks.push(frontPool[Math.floor(Math.random() * frontPool.length)]);
+    const type = weightedShopType(frontPool, chosenTypes);
+    picks.push(type);
+    chosenTypes.add(type);
     frontSpace--;
   }
 
   let tries = 0;
-  while (picks.length < count && tries < 30) {
+  while (picks.length < count && tries < 60) {
     tries++;
     const canBack  = backSpace > 0;
     const canFront = frontSpace > 0;
     if (!canBack && !canFront) break;
+
     if (canBack && (!canFront || Math.random() < 0.7)) {
-      picks.push(backPool[Math.floor(Math.random() * backPool.length)]);
+      const type = weightedShopType(backPool, chosenTypes);
+      picks.push(type);
+      chosenTypes.add(type);
       backSpace--;
     } else {
-      picks.push(frontPool[Math.floor(Math.random() * frontPool.length)]);
+      const type = weightedShopType(frontPool, chosenTypes);
+      picks.push(type);
+      chosenTypes.add(type);
       frontSpace--;
     }
   }
 
-  return picks.map(type => {
+  const allCandidates = [...new Set([...backPool, ...frontPool])];
+  if (picks.length >= 3 && new Set(picks).size < Math.min(3, allCandidates.length)) {
+    const unused = allCandidates.filter(t => !picks.includes(t));
+    for (let i = 0; i < picks.length && unused.length > 0; i++) {
+      const sameTypeCount = picks.filter(t => t === picks[i]).length;
+      if (sameTypeCount > 1) {
+        picks[i] = unused.pop();
+      }
+    }
+  }
+
+  const usedTraits = new Set();
+  const items = picks.map(type => {
     let trait = pickTrait(wave);
-    if (type === 'king' && trait === 'mercenary') trait = null; // kings can't be mercenaries
+    if (type === 'king' && trait === 'mercenary') trait = null;
+    if (trait && usedTraits.has(trait) && Math.random() < 0.75) {
+      const unusedTraits = Object.keys(TRAITS).filter(t => !usedTraits.has(t));
+      if (unusedTraits.length) trait = unusedTraits[Math.floor(Math.random() * unusedTraits.length)];
+    }
+    if (trait) usedTraits.add(trait);
     const base  = PIECE_COSTS[type];
     const cost  = trait === 'mercenary' ? Math.max(1, Math.round(base * 0.5))
                 : trait === 'iron'      ? base * 2
@@ -149,6 +188,20 @@ function waveShopAdditions(wave) {
                 : base;
     return { type, cost, trait };
   });
+
+  if (!items.some(item => item.trait) && items.length > 0) {
+    const idx = Math.floor(Math.random() * items.length);
+    let trait = Object.keys(TRAITS)[Math.floor(Math.random() * Object.keys(TRAITS).length)];
+    if (items[idx].type === 'king' && trait === 'mercenary') trait = 'iron';
+    items[idx].trait = trait;
+    const base = PIECE_COSTS[items[idx].type];
+    items[idx].cost = trait === 'mercenary' ? Math.max(1, Math.round(base * 0.5))
+                   : trait === 'iron'      ? base * 2
+                   : trait === 'raider'    ? Math.round(base * 1.5)
+                   : base;
+  }
+
+  return items;
 }
 
 function showShop(earned, nextWave) {
