@@ -432,7 +432,7 @@ function drawGoPiece(g) {
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.5)';
   ctx.shadowBlur  = 6;
-  drawPieceImage('go_piece', x, y, null);
+  drawPieceImage('go_piece', x, y, TINT_CHECKER);
   ctx.restore();
 }
 
